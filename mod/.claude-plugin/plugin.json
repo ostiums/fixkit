@@ -1,0 +1,10 @@
+{
+  "name": "fixkit",
+  "version": "0.1.0",
+  "description": "Long press any element of your iOS app in the simulator, say what is wrong, and the report lands in this session as a prompt; a pane shows the queue until the fix is live.",
+  "author": { "name": "ostiums" },
+  "homepage": "https://github.com/ostiums/fixkit",
+  "repository": "https://github.com/ostiums/fixkit",
+  "keywords": ["ios", "swiftui", "simulator", "xcode"],
+  "types": "./types/index.d.ts"
+}
