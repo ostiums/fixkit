@@ -2,6 +2,10 @@
 
 Long press any element of your iOS app in the simulator, type what is wrong, press Return. The report lands in the Claude Code session already running in your project: the element, a screenshot, your words. Claude fixes the code and relaunches the app, and a banner in the app follows the fix from queued to live.
 
+![Long presses in the simulator send reports to Claude Code in the terminal: a shifted button, a corner radius, a single-colour chart and the tab bar, each fixed while the app relaunches](docs/demo.gif)
+
+[Watch the demo in full quality (MP4, 47 s)](docs/demo.mp4)
+
 FixKit has two parts:
 
 - **the fixkit mod** for Claude Code receives the reports;
@@ -174,3 +178,7 @@ A press opens the composer on a `.fixable` element or a point, types the text le
 ## Development
 
 `scripts/test.sh` runs every check: `claude plugin validate` on the marketplace and the mod, the mod's tests (`claude plugin test mod`), the receiver's tests (`node --test`), the Swift package's tests on the simulator, and Tally's Debug and Release builds.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
