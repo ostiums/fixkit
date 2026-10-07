@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { FixReport, FixStatus, Incoming, Receiver } from '../types'
-import { INSTRUCTIONS, isBuildAndRun, pressedLabel, promptFor } from './prompt'
+import { INSTRUCTIONS, instructionsFor, isBuildAndRun, pressedLabel, promptFor, stoppedLabel } from './prompt'
 
 const PANE = 'fix-queue'
 const TITLE = 'Fix queue'
@@ -35,6 +35,8 @@ const isActive = (report: FixReport) => report.status !== 'live' && report.statu
 let cwd = ''
 // The report whose turn is running; its prompt was submitted by this mod.
 let current: string | null = null
+// The system prompt section for this project: React Native's when its package.json says so.
+let instructions = INSTRUCTIONS
 
 function relative(path: string) {
   return cwd && path.startsWith(cwd + '/') ? path.slice(cwd.length + 1) : path
@@ -50,6 +52,7 @@ async function patch($: EngineInterface, id: string, change: (report: FixReport)
 async function accept($: EngineInterface, incoming: Incoming) {
   const { file, line } = incoming.element ?? {}
   const source = file && line ? `${relative(file)}:${line}` : null
+  const usedAt = (incoming.element?.usedAt ?? []).map(({ file, line }) => `${relative(file)}:${line}`)
   const report: FixReport = {
     id: incoming.id,
     comment: incoming.comment,
@@ -57,8 +60,10 @@ async function accept($: EngineInterface, incoming: Incoming) {
     accessibility: incoming.accessibility ?? null,
     viewDescription: incoming.viewDescription ?? null,
     source,
+    usedAt,
     screen: incoming.screen,
     screenshot: incoming.screenshot,
+    platform: incoming.platform ?? 'ios',
     status: 'queued',
     receivedAt: await $.clock.now(),
     finishedAt: null,
@@ -70,7 +75,7 @@ async function accept($: EngineInterface, incoming: Incoming) {
 
   // Resolves when the report's own turn starts, after any turn already running.
   // As the person's own words: they typed the comment, and the engine adds no frame around it.
-  await $.prompt.submit({ text: promptFor(incoming, source), asUser: true })
+  await $.prompt.submit({ text: promptFor(incoming, source, usedAt), asUser: true })
   current = report.id
   await patch($, report.id, one => ({ ...one, status: 'fixing' }))
 }
@@ -127,9 +132,10 @@ async function listen($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
+    instructions = instructionsFor(await $.fs.read('package.json').catch(() => null))
     await $.command.register({
       name: 'fix-queue',
-      description: 'Show the fix requests sent from the iOS app in the simulator',
+      description: 'Show the fix requests sent from the app in the simulator',
     })
     const started = await next(e)
 
@@ -151,7 +157,7 @@ export const register: Register = on => {
     const composed = await next(e)
 
     return {
-      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: INSTRUCTIONS, scope: 'session' }],
+      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: instructions, scope: 'session' }],
     }
   })
 
@@ -240,7 +246,7 @@ export const register: Register = on => {
             <Box flexDirection="column" marginTop={1}>
               <Box justifyContent="space-between">
                 <Text color={look.color} bold>
-                  {look.mark} {report.id} {look.label}
+                  {look.mark} {report.id} {report.status === 'stopped' ? stoppedLabel(report.platform) : look.label}
                 </Text>
                 <Text dimColor>{seconds}s</Text>
               </Box>

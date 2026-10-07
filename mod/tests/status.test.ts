@@ -46,6 +46,9 @@ function world(on: On) {
     submitted()
     return { text: e.text }
   })
+  on('fs.read', async () => {
+    throw new Error('ENOENT')
+  })
   on('fs.write', async (_$, e) => {
     if (e.path.endsWith('status.json')) statuses.push(JSON.parse(e.text))
     return { value: undefined }
