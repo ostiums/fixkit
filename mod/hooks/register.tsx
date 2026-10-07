@@ -48,12 +48,14 @@ async function patch($: EngineInterface, id: string, change: (report: FixReport)
 }
 
 async function accept($: EngineInterface, incoming: Incoming) {
-  const source = incoming.element ? `${relative(incoming.element.file)}:${incoming.element.line}` : null
+  const { file, line } = incoming.element ?? {}
+  const source = file && line ? `${relative(file)}:${line}` : null
   const report: FixReport = {
     id: incoming.id,
     comment: incoming.comment,
     element: incoming.element?.name ?? null,
     accessibility: incoming.accessibility ?? null,
+    view: incoming.view ?? null,
     source,
     screen: incoming.screen,
     screenshot: incoming.screenshot,

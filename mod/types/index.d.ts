@@ -24,12 +24,17 @@ export type Incoming = {
   screen: string
   screenshot: string | null
   touch?: { x: number; y: number }
-  /** The element marked with `.fixable` under the touch, when there is one. */
+  /**
+   * The element under the touch: one marked with `.fixable`, with its source line, or in a UIKit
+   * app a view named after the property that holds it (`ProfileViewController.nameLabel`), without one.
+   */
   element?: {
     name: string
-    file: string
-    line: number
+    file?: string
+    line?: number
   }
+  /** UIKit only: the pressed view's class and text, as the app sees it. */
+  view?: string
   accessibility?: Accessibility | null
 }
 
@@ -39,6 +44,8 @@ export type FixReport = {
   /** The `.fixable` name of what was pressed, when the app marks it. */
   element: string | null
   accessibility: Accessibility | null
+  /** UIKit only: the pressed view's class and text. */
+  view: string | null
   /** `path:line` of the element's declaration, relative to the project. */
   source: string | null
   screen: string

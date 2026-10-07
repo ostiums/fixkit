@@ -65,6 +65,44 @@ test('with nothing known, the touch point stands in', () => {
   expect(prompt).toBe('Too dark\n\n[fix r3] touch at 120,340')
 })
 
+test('a UIKit view named after its property leads with that name', () => {
+  const prompt = promptFor(
+    {
+      id: 'r4',
+      comment: 'The name is cut off',
+      screen: 'ProfileViewController',
+      screenshot: '.fixkit/reports/r4.png',
+      element: { name: 'ProfileViewController.nameLabel' },
+      view: 'UILabel "Alex Morgan"',
+      accessibility: { element: { ...amount.element, label: 'Alex Morgan' }, within: null, nearby: [] },
+    },
+    null,
+  )
+
+  expect(prompt).toBe(
+    'The name is cut off\n\n' +
+      '[fix r4] ProfileViewController.nameLabel · StaticText "Alex Morgan" · .fixkit/reports/r4.png',
+  )
+})
+
+test("without accessibility, the app's own description of the view stands in", () => {
+  const prompt = promptFor(
+    {
+      id: 'r5',
+      comment: 'Make it bold',
+      screen: 'ProfileViewController',
+      screenshot: '.fixkit/reports/r5.png',
+      view: 'UILabel "Alex Morgan"',
+      accessibility: null,
+    },
+    null,
+  )
+
+  expect(prompt).toBe(
+    'Make it bold\n\n[fix r5] UILabel "Alex Morgan" · ProfileViewController screen · .fixkit/reports/r5.png',
+  )
+})
+
 test('an icon is described with the control around it and its value', () => {
   expect(
     describeAccessibility({
@@ -84,6 +122,9 @@ test('the pane names a marked element, else what accessibility said, else the sc
     'StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September"',
   )
   expect(pressedLabel({ element: null, accessibility: null, screen: 'Activity' })).toBe('Activity screen')
+  expect(pressedLabel({ element: null, accessibility: null, view: 'UILabel "Alex Morgan"', screen: 'ProfileViewController' })).toBe(
+    'UILabel "Alex Morgan"',
+  )
   expect(pressedLabel({ element: null, accessibility: null, screen: '' })).toBe('unnamed element')
 })
 
