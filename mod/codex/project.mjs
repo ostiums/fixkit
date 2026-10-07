@@ -3,15 +3,16 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { isReactNativeProject } from '../core/prompt.mjs'
+import { projectKind } from '../core/prompt.mjs'
 
 const APPLE = /\.(xcodeproj|xcworkspace)$|^Package\.swift$/
 
 /**
  * The app project around `cwd`: the nearest folder, up to the git root, holding an Xcode
- * project or workspace, a Package.swift, or a package.json that depends on React Native.
+ * project or workspace, a Package.swift, a package.json that depends on React Native, or a
+ * pubspec.yaml that depends on Flutter.
  * @param {string} cwd
- * @returns {{ packageJson: string | null } | null}
+ * @returns {{ packageJson: string | null, pubspec: string | null } | null}
  */
 export function appProject(cwd) {
   for (let dir = cwd; ; dir = dirname(dir)) {
@@ -20,8 +21,9 @@ export function appProject(cwd) {
       names = readdirSync(dir)
     } catch {}
     const packageJson = names.includes('package.json') ? read(join(dir, 'package.json')) : null
-    if (isReactNativeProject(packageJson)) return { packageJson }
-    if (names.some(name => APPLE.test(name))) return { packageJson }
+    const pubspec = names.includes('pubspec.yaml') ? read(join(dir, 'pubspec.yaml')) : null
+    if (projectKind({ packageJson, pubspec }) !== 'native') return { packageJson, pubspec }
+    if (names.some(name => APPLE.test(name))) return { packageJson, pubspec }
     if (names.includes('.git') || dirname(dir) === dir) return null
   }
 }

@@ -49,8 +49,13 @@ When a prompt carries that line:
 - Save the change and do not rebuild: Metro's Fast Refresh puts it on screen, which counts the report as fixed. Rebuild only when the change touches native code or native configuration, with the project's own command (npx expo run:ios, npx react-native run-ios).
 - Answer in one or two sentences: what was wrong and what changed.`
 
-/** What a `[fix …]` prompt calls for in a Flutter project, in place of `INSTRUCTIONS`. */
-export const FLUTTER_INSTRUCTIONS = `# Fix requests from the running app
+/**
+ * What a `[fix …]` prompt calls for in a Flutter project, in place of `INSTRUCTIONS`, with the way
+ * the harness hot reloads the app: `reload` asks for a reload, `restart` for a restart instead.
+ * @param {{ reload: string, restart: string }} how
+ */
+export function flutterInstructions({ reload, restart }) {
+  return `# Fix requests from the running app
 
 A prompt that ends with a line like
 
@@ -65,8 +70,12 @@ When a prompt carries that line:
 - Without one, find the widget by searching the app's .dart sources for its label and the labels beside it; a label made from data (an amount, a date) is found through the widget that formats it, so search the neighbouring fixed labels first.
 - Make the smallest change that does what was asked. Do not refactor.
 - Open the screenshot only when the text and the code leave the request unclear.
-- Save the change and call the hot_reload tool: it puts the change on screen, which counts the report as fixed. Pass restart: true when hot reload does not apply the change: a change to initState, field initializers, global or static variables, main, or an enum or generic type. When it fails, run dart analyze on the files you changed, fix what it reports and call it again. Rebuild with flutter run only when the change touches native code or native configuration.
+- Save the change and ${reload}: it puts the change on screen, which counts the report as fixed. ${restart} when hot reload does not apply the change: a change to initState, field initializers, global or static variables, main, or an enum or generic type. When it fails, run dart analyze on the files you changed, fix what it reports and call it again. Rebuild with flutter run only when the change touches native code or native configuration.
 - Answer in one or two sentences: what was wrong and what changed.`
+}
+
+/** The Flutter instructions for Claude Code, whose mod serves the hot_reload tool. */
+export const FLUTTER_INSTRUCTIONS = flutterInstructions({ reload: 'call the hot_reload tool', restart: 'Pass restart: true' })
 
 /** The tool the mod serves in a Flutter project: hot reload, or restart, the app `flutter run` runs. */
 export const HOT_RELOAD_TOOL = 'mcp__fixkit__hot_reload'

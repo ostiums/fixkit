@@ -9,10 +9,12 @@ import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { connect } from 'node:net'
 
-import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../core/prompt.mjs'
+import { FLUTTER_INSTRUCTIONS, INSTRUCTIONS, RN_INSTRUCTIONS } from '../core/prompt.mjs'
 import { codexDriver, codexQueue } from '../codex/driver.mjs'
 import { appProject } from '../codex/project.mjs'
 import { freePort, project, startReceiver, until } from './receiver.mjs'
+
+const FLUTTER_PUBSPEC = 'name: wallet\ndependencies:\n  flutter:\n    sdk: flutter\n'
 
 const SESSION_START = new URL('../codex/session-start.mjs', import.meta.url).pathname
 
@@ -268,14 +270,18 @@ test('codex queue gets the session and the message as one argument each, whateve
 
 test('an app project is found from a folder inside it, up to the git root', () => {
   const ios = tree({ '.git': null, 'Tally.xcodeproj': null, 'Tally/App': null })
-  assert.deepEqual(appProject(join(ios, 'Tally/App')), { packageJson: null })
-  assert.deepEqual(appProject(tree({ 'Package.swift': '' })), { packageJson: null })
+  assert.deepEqual(appProject(join(ios, 'Tally/App')), { packageJson: null, pubspec: null })
+  assert.deepEqual(appProject(tree({ 'Package.swift': '' })), { packageJson: null, pubspec: null })
 
   const rn = tree({ '.git': null, 'package.json': '{"dependencies":{"react-native":"0.81.0"}}', 'ios/App.xcodeproj': null })
   assert.match(appProject(rn).packageJson, /react-native/)
+
+  const flutter = tree({ '.git': null, 'pubspec.yaml': FLUTTER_PUBSPEC, 'lib/main.dart': '' })
+  assert.match(appProject(join(flutter, 'lib')).pubspec, /sdk: flutter/)
 })
 
 test('anything else is no app project', () => {
+  assert.equal(appProject(tree({ '.git': null, 'pubspec.yaml': 'name: tool\ndependencies:\n  args: ^2.0.0\n' })), null)
   assert.equal(appProject(tree({ '.git': null, 'package.json': '{"dependencies":{"react":"19"}}' })), null)
   assert.equal(appProject(tree({ '.git': null })), null)
   // The git root is the edge: an app above it belongs to another project.
@@ -321,6 +327,24 @@ test('a React Native project gets its own instructions', async t => {
 
   const { out } = await sessionStart(cwd, 'S', { FIXKIT_PORT: String(port) })
   assert.equal(JSON.parse(out).hookSpecificOutput.additionalContext, RN_INSTRUCTIONS)
+  await until(() => fetch(`http://127.0.0.1:${port}/codex/session`).then(res => res.ok, () => false))
+})
+
+test('a Flutter project gets instructions that hot reload through the receiver, not a tool Codex lacks', async t => {
+  const cwd = tree({ 'pubspec.yaml': FLUTTER_PUBSPEC })
+  const port = await freePort()
+  t.after(() =>
+    fetch(`http://127.0.0.1:${port}/codex/hook`, {
+      method: 'POST',
+      body: JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 'S' }),
+    }).catch(() => {}),
+  )
+
+  const { out } = await sessionStart(cwd, 'S', { FIXKIT_PORT: String(port) })
+  const instructions = JSON.parse(out).hookSpecificOutput.additionalContext
+  assert.match(instructions, new RegExp(`curl -s -X POST http://127\\.0\\.0\\.1:${port}/reload`))
+  assert.doesNotMatch(instructions, /hot_reload tool/)
+  assert.equal(instructions.split('\n')[0], FLUTTER_INSTRUCTIONS.split('\n')[0])
   await until(() => fetch(`http://127.0.0.1:${port}/codex/session`).then(res => res.ok, () => false))
 })
 
