@@ -1,20 +1,20 @@
 # FixKit
 
-**Long press anything in your iOS app in the simulator, say what's wrong, and Claude Code fixes it.**
+**Long press anything in your iOS or React Native app in the simulator, say what's wrong, and Claude Code fixes it.**
 
-![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![SwiftUI and UIKit](https://img.shields.io/badge/SwiftUI%20%7C%20UIKit-supported-brightgreen) ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
+![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![SwiftUI, UIKit and React Native](https://img.shields.io/badge/SwiftUI%20%7C%20UIKit%20%7C%20React%20Native-supported-brightgreen) ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ![Long presses in the simulator send reports to Claude Code in the terminal: a shifted button, a corner radius, a single-colour chart and the tab bar, each fixed while the app relaunches](docs/demo.gif)
 
 [Watch the demo in full quality (MP4, 47 s)](docs/demo.mp4)
 
-**[Quick start](#quick-start) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
+**[Quick start](#quick-start) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
 
 1. **Long press** an element and type what's wrong.
 2. **The report lands** in the Claude Code session already running in your project: the element, a screenshot, your words.
 3. **Claude fixes the code** and relaunches the app, while a banner follows the fix: `queued → fixing → rebuilding → live`.
 
-FixKit has two parts: the **fixkit mod** for Claude Code receives reports, and the **FixKit Swift package** sends them from a debug build of a SwiftUI or UIKit app. Release builds contain none of it.
+FixKit has two parts: the **fixkit mod** for Claude Code receives reports, and the app sends them from a debug build: the **FixKit Swift package** from a SwiftUI or UIKit app, the **react-native-fixkit** npm package from a React Native one. Release builds contain none of it.
 
 ## Quick start
 
@@ -134,6 +134,50 @@ For an exact line, mark the view. A mark wins over the property name:
 let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
 ```
 
+## React Native
+
+`react-native-fixkit` brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.78+ (React 19) with the New Architecture.
+
+Native apps never see it: the Swift package is unchanged, and the mod switches to its React Native instructions only in a project whose `package.json` depends on `react-native`.
+
+```bash
+npm install --save-dev react-native-fixkit
+```
+
+Wrap the app's root, once:
+
+```tsx
+import { FixKitHost } from 'react-native-fixkit'
+
+export default function App() {
+  return (
+    <FixKitHost>
+      <RootNavigator />
+    </FixKitHost>
+  )
+}
+```
+
+Nothing has to be marked. React records where each element's JSX is written, so a report names the components around the pressed element, the line of its JSX and where its component is used:
+
+```
+[fix r1] WalletCard › Text · src/WalletCard.tsx:11 · used at App.tsx:15 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
+```
+
+- **No rebuild.** Claude saves the file, Fast Refresh puts it on screen and the report turns live. Claude rebuilds only for a change to native code.
+- **`testID`s show up** in accessibility's description as `#id`.
+- **The pressed button stays still.** While FixKit holds a press, `Pressable`, the `Touchable` components, `Button` and pressable `Text` neither long-press nor press on release. For that FixKit wraps React Native's private `Pressability` in development, and Metro warns once about the deep import. Gesture Handler's native buttons are not held.
+- **The receiver does the native parts.** It takes the screenshot with `simctl` and asks Metro for the source lines. With several simulators booted on the same iOS version it cannot tell which one runs the app, and reports come without a screenshot.
+- **Not covered yet:** presses inside a native `Modal` or a natively presented screen, and Android, where `<FixKitHost>` renders its children and nothing else.
+- **Release bundles** contain none of it: Metro drops the host with `__DEV__`.
+
+`react-native/example` is a small Expo app to try it on:
+
+```bash
+cd react-native/example && npm install && npx expo start --ios
+claude --plugin-dir ../../mod    # in the same folder
+```
+
 ## How it works
 
 ```
@@ -190,7 +234,7 @@ A press opens the composer on a `.fixable` element or a point, types the text an
 
 ## Development
 
-`scripts/test.sh` runs every check: plugin validation, the mod's and the receiver's tests, the Swift package's tests on the simulator, and Tally's Debug and Release builds.
+`scripts/test.sh` runs every check: plugin validation, the mod's and the receiver's tests, the React Native package's tests (Node.js 22.18+ runs their TypeScript as is), the Swift package's tests on the simulator, and Tally's Debug and Release builds.
 
 ## License
 
