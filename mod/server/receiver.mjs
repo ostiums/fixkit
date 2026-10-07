@@ -1,6 +1,8 @@
-// Receives fix reports from an app's FixKit debug build and hands them to the
-// fixkit mod: one JSON line on stdout per event. Started by the mod with
-// $.process.spawn and killed with it. One receiver owns the port at a time: a
+// Receives fix reports from an app's FixKit debug build and hands them to a driver
+// for the harness at work. By default that is Claude Code's fixkit mod: one JSON line
+// on stdout per event, started by the mod with $.process.spawn and killed with it.
+// With --codex <session> it is the Codex driver, which queues each report in that
+// session and follows it through Codex's hooks. One receiver owns the port at a time: a
 // newer one asks the older one to leave. No dependencies beside AXe, which is
 // optional: it tells which element a report's touch landed on. A React Native app
 // sends no simulator and no screenshot: the receiver finds the one, takes the other,
@@ -21,7 +23,26 @@ const statusFile = join(dir, 'status.json')
 const run = Date.now().toString(36)
 let count = 0
 
-const emit = event => process.stdout.write(JSON.stringify(event) + '\n')
+/** Claude Code's mod reads the events on stdout and writes every status change to a file. */
+const stdoutDriver = () => ({
+  watchesParent: true,
+  emit: event => process.stdout.write(JSON.stringify(event) + '\n'),
+  statuses: () => {
+    try {
+      return JSON.parse(readFileSync(statusFile, 'utf8'))
+    } catch {
+      return {}
+    }
+  },
+})
+
+const log = message => process.stderr.write(`${message}\n`)
+const driver =
+  process.argv[2] === '--codex'
+    ? (await import('../codex/driver.mjs')).codexDriver({ session: process.argv[3], cwd: process.cwd(), leave, log })
+    : stdoutDriver()
+const emit = event => driver.emit(event)
+const statuses = () => driver.statuses()
 const ACTIVE = new Set(['queued', 'fixing', 'rebuilding'])
 
 // The AXe that answered last; the search for one runs again only when it fails.
@@ -145,20 +166,14 @@ let delivered = Promise.resolve()
 
 // The session that started this receiver is gone when its pipe breaks or the
 // process is handed to launchd. Without this the receiver would keep the port
-// and swallow every report meant for the next session.
-const parent = process.ppid
-process.stdout.on('error', () => process.exit(0))
-setInterval(() => {
-  if (process.ppid !== parent) process.exit(0)
-}, 1000).unref()
-
-// The mod writes every status change to this file; the app polls it through us.
-const statuses = () => {
-  try {
-    return JSON.parse(readFileSync(statusFile, 'utf8'))
-  } catch {
-    return {}
-  }
+// and swallow every report meant for the next session. A driver started by a
+// short-lived hook has no such parent and says when its session ends.
+if (driver.watchesParent) {
+  const parent = process.ppid
+  process.stdout.on('error', () => process.exit(0))
+  setInterval(() => {
+    if (process.ppid !== parent) process.exit(0)
+  }, 1000).unref()
 }
 
 const reply = (res, code, body) => {
@@ -166,7 +181,7 @@ const reply = (res, code, body) => {
   res.end(JSON.stringify(body))
 }
 
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
 
   if (req.method === 'GET' && url.pathname === '/status') {
@@ -199,14 +214,21 @@ const server = createServer((req, res) => {
   // A newer session's receiver asks for the port.
   if (req.method === 'POST' && url.pathname === '/shutdown') {
     reply(res, 200, { run })
-    emit({ type: 'error', message: 'a newer session took over the reports' })
-    server.close(() => process.exit(0))
-    server.closeAllConnections()
+    leave('a newer session took over the reports')
     return
   }
 
+  if (await driver.route?.(req, res, url)) return
+
   reply(res, 404, { error: 'not found' })
 })
+
+/** Gives the port up and exits, saying why. */
+function leave(message) {
+  emit({ type: 'error', message })
+  server.close(() => process.exit(0))
+  server.closeAllConnections()
+}
 
 // The port is taken by an earlier receiver: one left behind by a closed session, or the
 // one a reload of the mod is replacing. Ask it to leave, then try again.

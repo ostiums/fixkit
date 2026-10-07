@@ -1,11 +1,13 @@
 // node --test mod/tests/*.node.test.mjs: the receiver as a process, with Swift and React Native reports.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+
+import { startReceiver, until } from './receiver.mjs'
 
 /** The receiver in a folder of its own on a free port, with its stdout as JSON events. */
 async function receiver() {
@@ -111,4 +113,32 @@ test('a React Native app that sends a stack at launch gets its stacks read from 
   } finally {
     metro.close()
   }
+})
+
+// The receiver as each harness drives it: stdout for Claude Code, a driver of its own for Codex.
+
+test('a report comes out on stdout, and statuses come from the file the mod writes', async t => {
+  const receiver = await startReceiver()
+  t.after(receiver.stop)
+
+  assert.deepEqual(await receiver.post('/report', { comment: 'Shifted', screen: 'Home', simulator: 'NO-SUCH-SIMULATOR' }), { id: 'r1' })
+  const report = await until(() => receiver.lines.find(line => line.type === 'report'))
+  assert.equal(report.report.id, 'r1')
+  assert.equal(report.report.comment, 'Shifted')
+
+  assert.equal((await receiver.get('/status?id=r1')).status, 'queued')
+  writeFileSync(join(receiver.cwd, '.fixkit', 'status.json'), JSON.stringify({ r1: 'fixing' }))
+  assert.equal((await receiver.get('/status?id=r1')).status, 'fixing')
+
+  const launched = await receiver.post('/launched', {})
+  assert.equal(launched.id, 'r1')
+  await until(() => receiver.lines.some(line => line.type === 'launched'))
+})
+
+test('with --codex the receiver serves its Codex session and prints nothing', async t => {
+  const receiver = await startReceiver({ args: ['--codex', 'S1'] })
+  t.after(receiver.stop)
+
+  assert.deepEqual(await receiver.get('/codex/session'), { session: 'S1' })
+  assert.deepEqual(receiver.lines, [])
 })
