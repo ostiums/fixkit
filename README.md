@@ -1,6 +1,6 @@
 # FixKit
 
-**Long press anything in your iOS or React Native app in the simulator, say what's wrong, and Claude Code fixes it.**
+**Long press anything in your iOS or React Native app in the simulator, say what's wrong, and Claude Code or Codex fixes it.**
 
 ![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![SwiftUI, UIKit and React Native](https://img.shields.io/badge/SwiftUI%20%7C%20UIKit%20%7C%20React%20Native-supported-brightgreen) ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
@@ -11,10 +11,10 @@
 **[Quick start](#quick-start) · [Codex](#codex) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
 
 1. **Long press** an element and type what's wrong.
-2. **The report lands** in the Claude Code session already running in your project: the element, a screenshot, your words.
-3. **Claude fixes the code** and relaunches the app, while a banner follows the fix: `queued → fixing → rebuilding → live`.
+2. **The report lands** in the Claude Code or Codex session already running in your project: the element, a screenshot, your words.
+3. **The agent fixes the code** and relaunches the app, while a banner follows the fix: `queued → fixing → rebuilding → live`.
 
-FixKit has two parts: the **fixkit mod** for Claude Code receives reports, and the app sends them from a debug build: the **FixKit Swift package** from a SwiftUI or UIKit app, the **fixkit** npm package from a React Native one. Release builds contain none of it.
+FixKit has two parts. The **fixkit plugin** receives reports: in Claude Code it is a mod, in Codex a set of hooks. The app sends them from a debug build: the **FixKit Swift package** from a SwiftUI or UIKit app, the **fixkit** npm package from a React Native one. Release builds contain none of it.
 
 ## Quick start
 
@@ -84,19 +84,27 @@ The Fix queue pane opens in terminals 144 columns or wider; `/fix-queue` opens i
 
 ## Codex
 
-The same repository is a Codex plugin. Reports land in the Codex session open in the project as queued messages, and the app's banners follow them as they do with Claude Code.
+The same repository is a Codex plugin. A report lands in the Codex session open in the project as a queued message, and the app's banner follows it as it does with Claude Code. It needs Codex CLI 0.159+ and the same setup as [Quick start](#quick-start): Node.js, AXe, the package and the line in the app.
 
 ```bash
 codex plugin marketplace add ostiums/fixkit
 codex plugin add fixkit@fixkit
 ```
 
-1. Start `codex` in the project's root. On the first start Codex asks to review the plugin's hooks: trust them there, or later in `/hooks`. Untrusted hooks do not run.
-2. Add `.fixkit/` to `.gitignore`, run a debug build in the simulator, long press, type, press Return.
+1. Add `.fixkit/` to `.gitignore`.
+2. Start `codex` in the project's root. On the first start Codex asks to review the plugin's hooks: trust them there, or later in `/hooks`. Untrusted hooks do not run.
+3. **Send the session its first message before the first long press.** Codex runs a plugin's hooks from the first turn on, so FixKit's receiver starts with that turn. Any message does, your first task included. To start with a long press instead, open the session with a message:
+
+   ```bash
+   codex "FixKit"
+   ```
+
+   A resumed session works the same way: the receiver starts with its next message.
+4. Run a debug build in the simulator, long press an element, type what's wrong, press Return.
 
 - **Needs Codex's shared app-server**, its default. Reports reach the session through `codex queue`, which cannot reach a session that runs a server of its own, as `codex --no-daemon` does.
 - **Only in app projects.** In a folder without an Xcode project, a `Package.swift` or a React Native `package.json`, up to the git root, the plugin starts nothing and adds nothing to the session.
-- **Nothing waits on FixKit.** Only the session's start and end run a hook Codex waits for. The rest run in the background, and tool hooks fire for `build_run_sim` alone.
+- **Nothing waits on FixKit.** Codex waits only for the hooks at the session's start and end. The others run in the background, and the tool hooks fire for `build_run_sim` alone.
 - **No pane.** Codex has no plugin UI, so the app's banners show the progress. The receiver logs to `$TMPDIR/fixkit-codex.log`.
 - **Closed sessions keep their reports.** A report sent after the session closed waits in its queue until the session is resumed.
 
@@ -106,7 +114,7 @@ Nothing has to be marked. Marks make a report point at an exact line.
 
 ### SwiftUI
 
-Without marks, the receiver reads the simulator's accessibility tree and names the element under the finger with the labels beside it. Claude finds the view by searching the sources for them:
+Without marks, the receiver reads the simulator's accessibility tree and names the element under the finger with the labels beside it. The agent finds the view by searching the sources for them:
 
 ```
 [fix r1] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r1.png
@@ -190,9 +198,9 @@ FixKit runs in any development build that Metro serves. There is nothing to add 
 | Expo with a development build | `npx expo run:ios` once, then `npx expo start --ios` |
 | React Native CLI | `npx react-native run-ios`, which starts Metro too |
 
-- **Start `claude` in the folder with the app's `package.json`.** That is how the mod knows the project is React Native, and where `.fixkit/` goes. Above it, Claude gets the iOS instructions and rebuilds where saving would do.
-- **Keep Metro running.** Fast Refresh puts Claude's edits on screen, and the receiver reads source lines from the map Metro serves.
-- **A native change still needs a native build.** For a change to native code or native configuration (the Podfile, `Info.plist`, an Expo config plugin), Claude runs the project's own command from the table. XcodeBuildMCP isn't needed.
+- **Start `claude` or `codex` in the folder with the app's `package.json`.** That is how the plugin knows the project is React Native, and where `.fixkit/` goes. Above it, the agent gets the iOS instructions and rebuilds where saving would do.
+- **Keep Metro running.** Fast Refresh puts the agent's edits on screen, and the receiver reads source lines from the map Metro serves.
+- **A native change still needs a native build.** For a change to native code or native configuration (the Podfile, `Info.plist`, an Expo config plugin), the agent runs the project's own command from the table. XcodeBuildMCP isn't needed.
 - **Release builds leave it out:** `npx expo run:ios --configuration Release`, an EAS build or an archive from Xcode.
 
 Nothing has to be marked. React records where each element's JSX is written, so a report names the components around the pressed element, the line of its JSX and where its component is used:
@@ -201,10 +209,10 @@ Nothing has to be marked. React records where each element's JSX is written, so 
 [fix r1] WalletCard › Text · src/WalletCard.tsx:11 · used at App.tsx:15 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
 ```
 
-- **No rebuild.** Claude saves the file, Fast Refresh puts it on screen and the report turns live. Claude rebuilds only for a change to native code.
+- **No rebuild.** The agent saves the file, Fast Refresh puts it on screen and the report turns live. It rebuilds only for a change to native code.
 - **`testID`s show up** in accessibility's description as `#id`.
 - **The pressed button stays still.** While FixKit holds a press, `Pressable`, the `Touchable` components, `Button` and pressable `Text` neither long-press nor press on release. For that FixKit wraps React Native's private `Pressability` in development, and Metro warns once about the deep import. Gesture Handler's native buttons are not held.
-- **Lines come from the code the app launched with.** Once Fast Refresh has changed a file, its lines in later reports can be a few off until the next reload; Claude is told to look around them.
+- **Lines come from the code the app launched with.** Once Fast Refresh has changed a file, its lines in later reports can be a few off until the next reload; the agent is told to look around them.
 - **The receiver does the native parts.** It takes the screenshot with `simctl` and reads the source lines from the map Metro served with the bundle. With several simulators booted on the same iOS version it cannot tell which one runs the app, and reports come without a screenshot.
 - **Not covered yet:** presses inside a native `Modal` or a natively presented screen, a second `<FixKitHost>` inside the first, and Android, where `<FixKitHost>` renders its children and nothing else.
 - **Release bundles** contain none of it: Metro drops the host along with `__DEV__`.
@@ -229,9 +237,9 @@ app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──A
 - **The composer and banners** live in FixKit's own window above the app. They cover sheets and stay out of screenshots. When the keyboard would hide the element, the app slides up.
 - **The report** goes over the simulator's loopback, with no configuration. The receiver names the deepest element under the touch and saves the whole tree as `.fixkit/reports/<id>.ax.json`. A UIKit app's own description of the view comes first, since accessibility goes by position.
 - **The mod** submits the prompt, explains the `[fix …]` line in the system prompt and writes each status to `.fixkit/status.json`, which the app polls.
-- **In Codex** the receiver runs with `--codex <session>`: it queues the prompt with `codex queue`, the hooks post the turn's progress to it, and it keeps the statuses in memory. The prompt and the status rules are the same modules in `mod/core/`.
-- **"Live"** means the app launched again while Claude worked on the report: through XcodeBuildMCP, `xcodebuild` and `simctl`, or Run in Xcode.
-- **One session at a time.** A session started later takes port 4747 over.
+- **In Codex** the session's first turn starts the receiver with `--codex <session>`. It queues each prompt with `codex queue`, the hooks post the turn's progress to it, and it keeps the statuses in memory. Both harnesses share the prompt and the status rules in `mod/core/`.
+- **"Live"** means the app launched again while the agent worked on the report: through XcodeBuildMCP, `xcodebuild` and `simctl`, or Run in Xcode.
+- **One session at a time.** A session started later, in Claude Code or Codex, takes port 4747 over.
 - **Release builds** compile FixKit out: `.fixKitHost()` returns the view unchanged and `window.fixKitHost()` does nothing. The package defines `DEBUG` for itself, whatever flags the app sets.
 
 ## Try it on Tally
@@ -273,7 +281,7 @@ A press opens the composer on a `.fixable` element or a point, types the text an
 
 ## Development
 
-`scripts/test.sh` runs every check: plugin validation, the mod's and the receiver's tests, the React Native package's tests (Node.js 22.18+ runs their TypeScript as is), the Swift package's tests on the simulator, and Tally's Debug and Release builds.
+`scripts/test.sh` runs every check: plugin validation, the tests of the mod, the receiver and the Codex hooks, the React Native package's tests (Node.js 22.18+ runs their TypeScript as is), the Swift package's tests on the simulator, and Tally's Debug and Release builds.
 
 ## License
 
