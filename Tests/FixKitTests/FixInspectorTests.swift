@@ -17,6 +17,14 @@ private final class ProfileHeaderView: UIView {
     }
 }
 
+/// Like a tab bar's container above the content: full screen, transparent, and passing touches through.
+private final class PassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+}
+
 private final class ProfileViewController: UIViewController {
     let header = ProfileHeaderView(frame: CGRect(x: 0, y: 0, width: 400, height: 100))
     let nameLabel = UILabel(frame: CGRect(x: 20, y: 120, width: 200, height: 30))
@@ -111,6 +119,21 @@ struct FixInspectorTests {
         let finding = inspect(40, 130)
         #expect(finding.element?.name != "ProfileViewController.nameLabel")
         #expect(finding.view != #"UILabel "Alex Morgan""#)
+    }
+
+    @Test func aContainerThatPassesTouchesThroughIsLookedPast() {
+        window.addSubview(PassthroughView(frame: window.bounds))
+        #expect(inspect(40, 130).element?.name == "ProfileViewController.nameLabel")
+    }
+
+    @Test func aButtonBuiltFromAConfigurationIsDescribedByItsTitle() {
+        let button = UIButton(configuration: .filled())
+        button.configuration?.title = "Top up"
+        button.frame = CGRect(x: 220, y: 400, width: 120, height: 44)
+        controller.view.addSubview(button)
+        window.layoutIfNeeded()
+
+        #expect(inspect(280, 420).view == #"UIButton "Top up""#)
     }
 
     @Test func aSwiftUIScreenGivesNothing() {
