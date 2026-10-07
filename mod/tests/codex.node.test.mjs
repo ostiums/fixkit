@@ -11,7 +11,7 @@ import { mkdirSync } from 'node:fs'
 import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../core/prompt.mjs'
 import { codexDriver, codexQueue } from '../codex/driver.mjs'
 import { appProject } from '../codex/project.mjs'
-import { freePort, project, until } from './receiver.mjs'
+import { freePort, project, startReceiver, until } from './receiver.mjs'
 
 const SESSION_START = new URL('../codex/session-start.mjs', import.meta.url).pathname
 
@@ -282,6 +282,93 @@ test('a React Native project gets its own instructions', async t => {
   const { out } = await sessionStart(cwd, 'S', { FIXKIT_PORT: String(port) })
   assert.equal(JSON.parse(out).hookSpecificOutput.additionalContext, RN_INSTRUCTIONS)
   await until(() => fetch(`http://127.0.0.1:${port}/codex/session`).then(res => res.ok, () => false))
+})
+
+const MOD = new URL('..', import.meta.url).pathname
+const manifest = JSON.parse(readFileSync(join(MOD, '.codex-plugin/plugin.json'), 'utf8'))
+const { hooks } = JSON.parse(readFileSync(join(MOD, 'codex/hooks.json'), 'utf8'))
+
+test('the Codex plugin declares its hooks, only the session edges waiting on them', () => {
+  assert.equal(manifest.name, 'fixkit')
+  assert.equal(manifest.hooks, './codex/hooks.json')
+  assert.deepEqual(Object.keys(hooks).sort(), [
+    'Interrupt',
+    'PostToolUse',
+    'PreToolUse',
+    'SessionEnd',
+    'SessionStart',
+    'Stop',
+    'UserPromptSubmit',
+  ])
+  for (const [event, groups] of Object.entries(hooks)) {
+    const waits = event === 'SessionStart' || event === 'SessionEnd'
+    for (const group of groups) {
+      for (const handler of group.hooks) assert.equal(handler.async === true, !waits, event)
+      assert.equal(group.matcher, event.endsWith('ToolUse') ? 'build_run_sim$' : undefined, event)
+    }
+  }
+})
+
+/** Runs an event's hook command the way Codex does: through a shell in the session's folder, input on stdin. */
+function runHook(event, input, { cwd, port }) {
+  const { command } = hooks[event][0].hooks[0]
+  return new Promise(resolve => {
+    const child = spawn('sh', ['-c', command], {
+      cwd,
+      env: { ...process.env, PLUGIN_ROOT: MOD.replace(/\/$/, ''), FIXKIT_PORT: String(port) },
+    })
+    child.on('exit', resolve)
+    child.stdin.end(JSON.stringify({ session_id: 'S', turn_id: 'T1', cwd, hook_event_name: event, ...input }))
+  })
+}
+
+test('end to end: a report is queued in Codex and its hooks walk it to live', async t => {
+  const cwd = tree({ '.git': null, 'Tally.xcodeproj': null })
+  const calls = join(cwd, 'codex-calls.jsonl')
+  const fake = join(cwd, 'codex')
+  writeFileSync(fake, `#!/usr/bin/env node\nrequire('fs').appendFileSync(${JSON.stringify(calls)}, JSON.stringify(process.argv.slice(2)) + '\\n')\n`)
+  chmodSync(fake, 0o755)
+  const receiver = await startReceiver({ args: ['--codex', 'S'], env: { FIXKIT_CODEX: fake }, cwd })
+  t.after(receiver.stop)
+  const status = async () => (await receiver.get('/status?id=r1')).status
+  const ctx = { cwd, port: receiver.port }
+
+  await receiver.post('/report', { comment: 'Button is shifted', screen: 'Home' })
+  const [args] = await until(() => {
+    try {
+      return readFileSync(calls, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
+    } catch {
+      return null
+    }
+  })
+  assert.deepEqual(args.slice(0, 2), ['queue', '--thread=S'])
+  const prompt = args[2].replace('--message=', '')
+  assert.match(prompt, /^Button is shifted\n\n\[fix r1\] Home screen$/)
+  assert.equal(await status(), 'queued')
+
+  assert.equal(await runHook('UserPromptSubmit', { prompt }, ctx), 0)
+  assert.equal(await status(), 'fixing')
+  await runHook('PreToolUse', { tool_name: BUILD }, ctx)
+  assert.equal(await status(), 'rebuilding')
+  assert.equal((await receiver.post('/launched', {})).id, 'r1')
+  await runHook('PostToolUse', { tool_name: BUILD }, ctx)
+  await runHook('Stop', {}, ctx)
+  assert.equal(await status(), 'live')
+
+  assert.equal(await runHook('SessionEnd', { reason: 'exit' }, ctx), 0)
+  await receiver.exited
+})
+
+test('the end of the session is answered before the receiver goes', async () => {
+  const receiver = await startReceiver({ args: ['--codex', 'S'] })
+
+  assert.deepEqual(await receiver.post('/codex/hook', { hook_event_name: 'SessionEnd', session_id: 'S' }), {})
+  await receiver.exited
+})
+
+test('a hook with no receiver to talk to still succeeds', async () => {
+  const cwd = tree({ '.fixkit': null })
+  assert.equal(await runHook('Stop', {}, { cwd, port: await freePort() }), 0)
 })
 
 test('outside an app project the session gets nothing and nothing starts', async () => {
