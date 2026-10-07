@@ -216,11 +216,16 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     /// Opens the composer for the element at the point, as a long press there does.
     func report(at point: CGPoint, in window: UIWindow? = nil) {
         guard let window = window ?? keyWindow else { return }
-        let element = FixRegistry.shared.element(at: point)
+        let finding = FixInspector.inspect(at: point, in: window)
+        // The innermost wins; on a tie the mark, which knows its source line.
+        let element = [FixRegistry.shared.element(at: point), finding.element]
+            .compactMap { $0 }
+            .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        let named = FixRegistry.shared.screen
         FixSession.shared.begin(
             FixTarget(
-                element: element, touch: point, screen: FixRegistry.shared.screen,
-                screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
+                element: element, touch: point, screen: named.isEmpty ? finding.screen ?? "" : named,
+                view: finding.view, screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
     }
 
     /// The window as it looks now, with the reported element outlined in red, or a red ring
