@@ -63,7 +63,7 @@
             "type": "command",
             "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
             "async": true,
-            "timeout": 5
+            "timeout": 3
           }
         ]
       }
@@ -74,7 +74,7 @@
           {
             "type": "command",
             "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
-            "timeout": 5
+            "timeout": 3
           }
         ]
       }
