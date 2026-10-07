@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { FLUTTER_INSTRUCTIONS, INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
+import { FLUTTER_INSTRUCTIONS, HOT_RELOAD_TOOL, INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
 
 // The test runner has timers; the hooks module's own environment, typed here, does not.
 declare function setTimeout(callback: () => void, ms: number): unknown
@@ -56,9 +56,9 @@ function world(on: On, files: Record<string, string> = {}) {
   })
   // The mod reads the project's files by their names in the working directory.
   on('fs.read', async (_$, e) => {
-    const name = e.path.split('/').pop() ?? e.path
-    if (!(name in files)) throw new Error('ENOENT')
-    return { value: files[name] }
+    const text = files[e.path.split('/').pop() ?? e.path]
+    if (text === undefined) throw new Error('ENOENT')
+    return { value: text }
   })
   on('tool.register', async (_$, e) => {
     registered.push(e.name)
@@ -166,7 +166,7 @@ test('hot_reload asks the receiver, and the reload it causes makes the fix live'
   await submission
   await until(() => statuses.at(-1)?.r1 === 'fixing')
 
-  const { result } = await $.tool.call({ tool: 'mcp__fixkit__hot_reload', restart: true })
+  const { result } = await $.tool.call({ tool: HOT_RELOAD_TOOL, restart: true })
   receiver.send({ type: 'launched' })
   await until(() => statuses.at(-1)?.r1 === 'live')
 
@@ -184,7 +184,7 @@ test("a failed reload is the tool's error, and the report goes back to fixing", 
   await submission
   await until(() => statuses.at(-1)?.r1 === 'fixing')
 
-  const result = await $.tool.call({ tool: 'mcp__fixkit__hot_reload' })
+  const result = await $.tool.call({ tool: HOT_RELOAD_TOOL })
 
   expect(result.isError).toBe(true)
   expect(result.text).toContain('dart analyze')

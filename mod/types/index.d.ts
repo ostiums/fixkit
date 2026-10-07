@@ -67,6 +67,10 @@ export type Receiver = {
 }
 
 declare module 'claude-code' {
+  interface McpToolInputs {
+    /** The mod's own tool in a Flutter project: hot reload, or with `restart` hot restart, the app. */
+    mcp__fixkit__hot_reload: { restart?: boolean }
+  }
   interface PluginState {
     fixkit: { reports: FixReport[]; receiver: Receiver; now: number }
   }

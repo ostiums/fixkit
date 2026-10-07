@@ -234,7 +234,7 @@ export const register: Register = on => {
   // The hot_reload tool, through the receiver, which holds the Flutter app's VM service. Registered
   // inside the hook above, which shows the report as rebuilding meanwhile.
   on('tool.call', { tool: HOT_RELOAD_TOOL }, async ($, e) => {
-    const restart = (e as { restart?: unknown }).restart === true
+    const restart = e.restart === true
     let answer: { ok: boolean; error?: string }
     try {
       if (port === null) throw new Error('The fixkit receiver is not listening yet')
