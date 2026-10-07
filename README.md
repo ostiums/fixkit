@@ -9,7 +9,7 @@ Long press any element of your iOS app in the simulator, type what is wrong, pre
 FixKit has two parts:
 
 - **the fixkit mod** for Claude Code receives the reports;
-- **the FixKit Swift package** sends them from a debug build. Release builds compile it away.
+- **the FixKit Swift package** sends them from a debug build of a SwiftUI or UIKit app. Release builds compile it away.
 
 ## Requirements
 
@@ -38,7 +38,9 @@ In Xcode, choose File › Add Package Dependencies, enter `https://github.com/os
 .package(url: "https://github.com/ostiums/fixkit", from: "0.1.0")
 ```
 
-### 3. One modifier on the root view
+### 3. One line in the app
+
+In a SwiftUI app, a modifier on the root view:
 
 ```swift
 import FixKit
@@ -55,7 +57,23 @@ struct MyApp: App {
 }
 ```
 
-That is the whole integration. The next section explains what the modifier does.
+In a UIKit app, a call on the main window once it is visible, in the scene delegate:
+
+```swift
+import FixKit
+import UIKit
+
+func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+    guard let scene = scene as? UIWindowScene else { return }
+    let window = UIWindow(windowScene: scene)
+    window.rootViewController = RootViewController()
+    window.makeKeyAndVisible()
+    window.fixKitHost()
+    self.window = window
+}
+```
+
+That is the whole integration. The next section explains what it installs.
 
 ### 4. The project folder
 
@@ -65,18 +83,18 @@ The mod writes reports to `.fixkit/` in the folder where `claude` runs, so start
 { "permissions": { "allow": ["Read(./.fixkit/**)"] } }
 ```
 
-## Why `.fixKitHost()` goes on the root view
+## What `fixKitHost()` installs
 
-The package does nothing until this modifier runs. It does four things:
+The package does nothing until it runs. It does four things:
 
 - **The long press.** It adds one long-press recognizer to the app's window, recognized alongside the app's own gestures. Buttons, lists and scroll views keep working; once a press has lasted half a second it belongs to FixKit, and the control under the finger does not also act on it.
 - **The composer.** It draws the dimmed screen with the pressed element lit and the comment field above the keyboard. When the keyboard would cover the element, it slides the app up.
 - **The banners.** It shows the report's progress at the top of the screen: sent, queued, fixing, rebuilding, fixed.
 - **The launch signal.** At every launch it tells the receiver the app is up. A launch while Claude works on a report is how the mod learns the fix is on screen, whether Claude rebuilt through XcodeBuildMCP, `xcodebuild` and `simctl`, or you pressed Run in Xcode. After the relaunch the app picks up the report's progress again.
 
-The composer and the banners are overlays of the view the modifier is applied to. On the root view they cover the whole screen, above navigation and tab bars. On a view further down they are clipped to that view and vanish with it when you navigate away. So apply it once, to the root view of the app's main window: a second one would draw a second composer. Sheets and full-screen covers are presented above the root view, so a press inside one opens the composer underneath it, out of sight.
+The composer and the banners live in a window of FixKit's own above the app's window, so they cover sheets and full-screen covers too, and stay out of report screenshots. That window lets every touch through to the app unless the composer is open. Install it once: a second call does nothing.
 
-In a release build `.fixKitHost()` returns the view unchanged and none of FixKit is compiled in. The package defines `DEBUG` for its own debug builds, whatever flags the app's project sets.
+In a release build `.fixKitHost()` returns the view unchanged, `window.fixKitHost()` does nothing, and none of FixKit is compiled in. The package defines `DEBUG` for its own debug builds, whatever flags the app's project sets.
 
 ## Using `.fixable`
 
@@ -118,6 +136,26 @@ What a mark changes:
 Put the mark on the view whose code you want Claude to open: the `Text` itself for a typo or a colour, the container for spacing or layout. A name only has to make sense to you; it may carry data, as in `.fixable("transaction.amount.\(transaction.merchant)")`. In a release build a mark returns the view unchanged; in a debug build it records the element's frame as the layout changes.
 
 `.fixScreen("Home")` names the screen on display. The name goes with every report as `Home screen`, which helps Claude find unmarked elements. Apply it to each screen's root view; with a `TabView`, `.fixScreen(selectedTab.rawValue)` on the tab view keeps it current.
+
+## UIKit views
+
+In a UIKit app FixKit reads the views themselves, so an unmarked view is still named precisely. At a press it takes the view under the finger, labels and images included, and looks for the stored property that holds it in the app's own objects around it: the view controller, a custom view, a cell. The report names that property, the view's class and text, and the view controller as the screen:
+
+```
+The name is cut off
+
+[fix r1] ProfileViewController.nameLabel · StaticText "Alex Morgan" · .fixkit/reports/r1.png
+```
+
+`@IBOutlet`s, `lazy var`s and arrays of views (`buttons[2]`) are found the same way. A press on a button's own label names the button. When no property holds the view, a local `let` in `viewDidLoad` say, the report carries `UILabel "Alex Morgan" · ProfileViewController screen`.
+
+To point a report at an exact line, mark the view, as `.fixable` does in SwiftUI:
+
+```swift
+let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
+```
+
+A mark wins over the property name when both cover the same view. In a release build `fixable` returns the view and records nothing.
 
 ## Use it
 
