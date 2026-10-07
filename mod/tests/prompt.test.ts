@@ -2,12 +2,15 @@ import { expect, test } from 'claude-code/testing'
 
 import type { Accessibility } from '../types'
 import {
+  FLUTTER_INSTRUCTIONS,
+  HOT_RELOAD_TOOL,
   INSTRUCTIONS,
   RN_INSTRUCTIONS,
   describeAccessibility,
   isBuildAndRun,
   isReactNativeProject,
   pressedLabel,
+  projectKind,
   promptFor,
 } from '../hooks/prompt'
 
@@ -189,4 +192,27 @@ test('a package.json that depends on React Native makes a React Native project',
 
   expect(RN_INSTRUCTIONS).toContain('Fast Refresh')
   expect(INSTRUCTIONS).not.toContain('React Native')
+})
+
+test('a pubspec that depends on the Flutter SDK makes a Flutter project, whatever package.json says', () => {
+  const pubspec = 'name: wallet\ndependencies:\n  flutter:\n    sdk: flutter\n'
+  expect(projectKind({ packageJson: null, pubspec })).toBe('flutter')
+  expect(projectKind({ packageJson: JSON.stringify({ dependencies: { 'react-native': '0.86' } }), pubspec })).toBe('flutter')
+})
+
+test('a pure Dart pubspec is not a Flutter project; React Native and native as before', () => {
+  expect(projectKind({ packageJson: null, pubspec: 'name: tool\ndependencies:\n  args: ^2.0.0\n' })).toBe('native')
+  expect(projectKind({ packageJson: JSON.stringify({ devDependencies: { 'react-native': '0.86' } }), pubspec: null })).toBe('react-native')
+  expect(projectKind({ packageJson: null, pubspec: null })).toBe('native')
+})
+
+test('the hot reload tool shows as rebuilding, like a build-and-run', () => {
+  expect(isBuildAndRun(HOT_RELOAD_TOOL)).toBe(true)
+  expect(isBuildAndRun('mcp__other__hot_reload')).toBe(false)
+})
+
+test('the Flutter instructions send Claude to the hot reload tool, not a rebuild', () => {
+  expect(FLUTTER_INSTRUCTIONS).toContain('call the hot_reload tool')
+  expect(FLUTTER_INSTRUCTIONS).toContain('restart: true')
+  expect(FLUTTER_INSTRUCTIONS).toContain('dart analyze')
 })
