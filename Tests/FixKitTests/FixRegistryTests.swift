@@ -90,6 +90,18 @@ struct FixRegistryTests {
         withExtendedLifetime(window) {}
     }
 
+    @Test func aMarkCoveredByASheetDoesNotWin() {
+        let registry = FixRegistry()
+        let label = UILabel(frame: CGRect(x: 20, y: 150, width: 120, height: 20))
+        let sheet = UIView(frame: CGRect(x: 0, y: 100, width: 400, height: 700))
+        let window = window(label, sheet)
+        registry.mark(label, name: "card.name", file: "/App/CardView.swift", line: 3)
+
+        #expect(registry.element(at: CGPoint(x: 40, y: 160), in: window) == nil)
+        sheet.removeFromSuperview()
+        #expect(registry.element(at: CGPoint(x: 40, y: 160), in: window)?.name == "card.name")
+    }
+
     @Test func markingAgainReplacesTheMark() {
         let registry = FixRegistry()
         let label = UILabel(frame: CGRect(x: 0, y: 0, width: 100, height: 20))

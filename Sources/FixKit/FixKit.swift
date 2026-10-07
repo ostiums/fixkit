@@ -76,9 +76,16 @@ final class FixRegistry {
         onScreen.first { $0.name == name }
     }
 
-    /// The innermost element under the point: the smallest frame that contains it.
-    func element(at point: CGPoint) -> FixElement? {
-        onScreen
+    /// The innermost element under the point: the smallest frame that contains it. Given the
+    /// window, a UIKit mark counts only on the path of the view a touch there would reach, so a
+    /// mark on the screen under a sheet does not win a press inside the sheet.
+    func element(at point: CGPoint, in window: UIWindow? = nil) -> FixElement? {
+        let hit = window?.hitTest(point, with: nil)
+        let marks = views.values.filter { mark in
+            guard let hit, let view = mark.view else { return true }
+            return hit.isDescendant(of: view) || view.isDescendant(of: hit)
+        }
+        return (Array(elements.values) + marks.compactMap(\.element))
             .filter { $0.frame.contains(point) }
             .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
     }

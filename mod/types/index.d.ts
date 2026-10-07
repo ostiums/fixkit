@@ -41,7 +41,7 @@ export type Incoming = {
 export type FixReport = {
   id: string
   comment: string
-  /** The `.fixable` name of what was pressed, when the app marks it. */
+  /** What was pressed: its `.fixable` name, or in a UIKit app the property that holds it (`Type.property`). */
   element: string | null
   accessibility: Accessibility | null
   /** UIKit only: the pressed view's class and text. */

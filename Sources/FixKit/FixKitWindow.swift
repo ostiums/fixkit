@@ -45,6 +45,18 @@ final class FixHost {
         }
     }
 
+    /// The app's view controller that decides one side of the status bar, its style or its
+    /// visibility: each is handed down its own chain of children.
+    static func statusBarController(
+        from root: UIViewController?, child: KeyPath<UIViewController, UIViewController?>
+    ) -> UIViewController? {
+        var controller = root
+        while let current = controller, let next = current.presentedViewController ?? current[keyPath: child] {
+            controller = next
+        }
+        return controller
+    }
+
     /// Slides the app up so the keyboard does not cover the pressed element.
     func lift(to height: CGFloat) {
         guard let appWindow else { return }
@@ -84,20 +96,15 @@ final class FixOverlayController: UIHostingController<FixOverlay> {
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        appStatusBarController?.preferredStatusBarStyle ?? .default
+        appController(child: \.childForStatusBarStyle)?.preferredStatusBarStyle ?? .default
     }
 
     override var prefersStatusBarHidden: Bool {
-        appStatusBarController?.prefersStatusBarHidden ?? false
+        appController(child: \.childForStatusBarHidden)?.prefersStatusBarHidden ?? false
     }
 
-    /// The app's view controller that decides its status bar.
-    private var appStatusBarController: UIViewController? {
-        var controller = FixHost.shared.appWindow?.rootViewController
-        while let next = controller?.presentedViewController ?? controller?.childForStatusBarStyle {
-            controller = next
-        }
-        return controller
+    private func appController(child: KeyPath<UIViewController, UIViewController?>) -> UIViewController? {
+        FixHost.statusBarController(from: FixHost.shared.appWindow?.rootViewController, child: child)
     }
 }
 

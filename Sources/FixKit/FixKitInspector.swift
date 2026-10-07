@@ -97,10 +97,12 @@ enum FixInspector {
         case let label as UILabel: label.text
         case let button as UIButton: button.configuration?.title ?? button.currentTitle
         case let field as UITextField: field.text.flatMap { $0.isEmpty ? nil : $0 } ?? field.placeholder
-        default: view.accessibilityLabel
+        default: nil
         }
         let kind = String(describing: type(of: view))
-        guard let text, !text.isEmpty else { return kind }
+        // An icon button or an image has no text of its own, only what it says to VoiceOver.
+        guard let text = text.flatMap({ $0.isEmpty ? nil : $0 }) ?? view.accessibilityLabel, !text.isEmpty
+        else { return kind }
         return "\(kind) \(String(reflecting: text))"
     }
 
