@@ -377,7 +377,8 @@ test('end to end: a report is queued in Codex and its hooks walk it to live', as
   const status = async () => (await receiver.get('/status?id=r1')).status
   const ctx = { cwd, port: receiver.port }
 
-  await receiver.post('/report', { comment: 'Button is shifted', screen: 'Home' })
+  // A simulator that does not exist, so the receiver takes no screenshot of a real one.
+  await receiver.post('/report', { comment: 'Button is shifted', screen: 'Home', simulator: 'NO-SUCH-SIMULATOR' })
   const [args] = await until(() => {
     try {
       return readFileSync(calls, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
