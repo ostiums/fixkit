@@ -1,0 +1,18 @@
+name: fixkit
+description: Long press any widget of a debug build in the iOS simulator, type what is wrong, and the report goes to the Claude Code session on your Mac through the fixkit mod.
+version: 0.1.0
+repository: https://github.com/ostiums/fixkit/tree/main/flutter
+topics: [debugging, developer-tools, ios]
+
+environment:
+  sdk: ^3.9.0
+  flutter: ">=3.35.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
