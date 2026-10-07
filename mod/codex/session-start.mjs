@@ -6,7 +6,7 @@ import { appendFileSync, openSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { instructionsFor } from '../core/prompt.mjs'
+import { INSTRUCTIONS, RN_INSTRUCTIONS, isReactNativeProject } from '../core/prompt.mjs'
 import { appProject } from './project.mjs'
 
 const PORT = Number(process.env.FIXKIT_PORT ?? 4747)
@@ -42,7 +42,7 @@ try {
     } catch (error) {
       appendFileSync(LOG, `session start: ${error}\n`)
     }
-    const additionalContext = instructionsFor(project.packageJson)
+    const additionalContext = isReactNativeProject(project.packageJson) ? RN_INSTRUCTIONS : INSTRUCTIONS
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }))
   }
 } catch (error) {
