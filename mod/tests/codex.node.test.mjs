@@ -7,6 +7,7 @@ import { test } from 'node:test'
 
 import { spawn } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
+import { connect } from 'node:net'
 
 import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../core/prompt.mjs'
 import { codexDriver, codexQueue } from '../codex/driver.mjs'
@@ -150,6 +151,45 @@ test("a person's own prompt is no fix turn, and closes one that never got its St
   fix.driver.emit({ type: 'launched' })
   fix.driver.hook(hook('Stop', { turn_id: 'T2' }))
   assert.equal(fix.status('r1'), 'stopped')
+})
+
+test("the next report's prompt can beat the last turn's Stop: the live fix stays live", async () => {
+  const fix = codex()
+  await start(fix, 'r1', 'T1')
+  fix.driver.emit({ type: 'launched' })
+  // Async hooks run in their own shells, so the queued turn's prompt may arrive first.
+  await start(fix, 'r2', 'T2')
+  fix.driver.hook(hook('Stop', { turn_id: 'T1' }))
+
+  assert.deepEqual(fix.driver.statuses(), { r1: 'live', r2: 'fixing' })
+})
+
+test('a late Interrupt still stops the turn it belongs to', async () => {
+  const fix = codex()
+  await start(fix, 'r1', 'T1')
+  fix.driver.emit({ type: 'launched' })
+  fix.driver.hook(hook('UserPromptSubmit', { prompt: 'never mind', turn_id: 'T2' }))
+  fix.driver.hook(hook('Interrupt', { turn_id: 'T1' }))
+
+  assert.equal(fix.status('r1'), 'stopped')
+})
+
+test('more input in the same turn keeps the fix going', async () => {
+  const fix = codex()
+  await start(fix, 'r1', 'T1')
+  fix.driver.hook(hook('UserPromptSubmit', { prompt: 'also make it blue', turn_id: 'T1' }))
+  fix.driver.emit({ type: 'launched' })
+  fix.driver.hook(hook('Stop', { turn_id: 'T1' }))
+
+  assert.equal(fix.status('r1'), 'live')
+})
+
+test('a prompt that is only the [fix …] line is still a fix turn', async () => {
+  const fix = codex()
+  fix.driver.emit(report('r1', { comment: '' }))
+  fix.driver.hook(hook('UserPromptSubmit', { prompt: '[fix r1] home.send · App/Home.swift:8' }))
+
+  assert.equal(fix.status('r1'), 'fixing')
 })
 
 test('statuses stay in the order the reports came, which the receiver answers a launch by', async () => {
@@ -368,6 +408,37 @@ test('the end of the session is answered before the receiver goes', async () => 
 
   assert.deepEqual(await receiver.post('/codex/hook', { hook_event_name: 'SessionEnd', session_id: 'S' }), {})
   await receiver.exited
+})
+
+test('a hook cut off in the middle of its body leaves the receiver running', async t => {
+  const receiver = await startReceiver({ args: ['--codex', 'S'] })
+  t.after(receiver.stop)
+
+  await new Promise(resolve => {
+    const socket = connect(receiver.port, '127.0.0.1', () => {
+      socket.write('POST /codex/hook HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n{"hook_event_')
+      setTimeout(() => socket.destroy(), 50)
+    })
+    socket.on('close', resolve)
+  })
+  await new Promise(resolve => setTimeout(resolve, 100))
+
+  assert.deepEqual(await receiver.get('/codex/session'), { session: 'S' })
+})
+
+test('without node on the PATH the session still starts, with nothing from FixKit', async () => {
+  const { command } = hooks.SessionStart[0].hooks[0]
+  const child = spawn('/bin/sh', ['-c', command], {
+    cwd: tree({ 'Tally.xcodeproj': null }),
+    env: { PATH: '/usr/bin:/bin', PLUGIN_ROOT: MOD.replace(/\/$/, '') },
+  })
+  let out = ''
+  child.stdout.on('data', chunk => (out += chunk))
+  child.stdin.end('{}')
+  const code = await new Promise(resolve => child.on('exit', resolve))
+
+  assert.equal(code, 0)
+  assert.equal(out, '')
 })
 
 test('a hook with no receiver to talk to still succeeds', async () => {

@@ -218,7 +218,14 @@ const server = createServer(async (req, res) => {
     return
   }
 
-  if (await driver.route?.(req, res, url)) return
+  // The handler is async for the driver's routes; nothing they throw may take the receiver down.
+  try {
+    if (await driver.route?.(req, res, url)) return
+  } catch (error) {
+    log(`${url.pathname}: ${error}`)
+    if (!res.headersSent) reply(res, 500, { error: String(error) })
+    return
+  }
 
   reply(res, 404, { error: 'not found' })
 })

@@ -3,7 +3,7 @@
   "hooks": {
     "SessionStart": [
       {
-        "hooks": [{ "type": "command", "command": "node \"$PLUGIN_ROOT/codex/session-start.mjs\"", "timeout": 10 }]
+        "hooks": [{ "type": "command", "command": "command -v node >/dev/null 2>&1 || exit 0; node \"$PLUGIN_ROOT/codex/session-start.mjs\"", "timeout": 10 }]
       }
     ],
     "UserPromptSubmit": [
