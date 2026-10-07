@@ -7,12 +7,14 @@ A prompt that ends with a line like
 
 [fix r1] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r1.png
 [fix r2] home.quickActions.send · App/Home/QuickActions.swift:8 · Button "Send" · .fixkit/reports/r2.png
+[fix r3] ProfileViewController.nameLabel · StaticText "Alex Morgan" · .fixkit/reports/r3.png
 
-was sent from the iOS app running in the simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the name and the file and line of its .fixable("name") modifier when the app marks it; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); the screen's name when the app gives one; and a screenshot with the element outlined in red, or a red ring where the finger was.
+was sent from the iOS app running in the simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the name and the file and line of its .fixable("name") modifier when the app marks it; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); in a UIKit app, the view named after the property that holds it as Type.property, or its class and text, and its view controller as the screen; the screen's name when the app gives one; and a screenshot with the element outlined in red, or a red ring where the finger was.
 
 When a prompt carries that line:
 - Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
 - With a file and line, start there: the cause is on that view or the one it wraps.
+- With a Type.property name, start at that property's declaration and where it is configured.
 - Without one, find the view by searching the Swift sources for the label and the labels beside it; a label made from data (an amount, a date) is found through the view that formats it, so search the neighbouring fixed labels first.
 - Make the smallest change that does what was asked. Do not refactor.
 - Open the screenshot only when the text and the code leave the request unclear.
@@ -41,24 +43,30 @@ export function describeAccessibility({ element, within, nearby }: Accessibility
  * `INSTRUCTIONS` tells the model what a message carrying a `[fix …]` line calls for.
  */
 export function promptFor(incoming: Incoming, source: string | null) {
-  const { accessibility, comment, element, id, screen, screenshot, touch } = incoming
+  const { accessibility, comment, element, id, screen, screenshot, touch, view } = incoming
   const context = [
     element?.name,
     source,
-    accessibility ? describeAccessibility(accessibility) : null,
+    accessibility ? describeAccessibility(accessibility) : view,
     // A marked element says where it is; otherwise the screen's name helps find it.
     !element && screen ? `${screen} screen` : null,
-    !element && !accessibility && touch ? `touch at ${Math.round(touch.x)},${Math.round(touch.y)}` : null,
+    !element && !accessibility && !view && touch ? `touch at ${Math.round(touch.x)},${Math.round(touch.y)}` : null,
     screenshot,
   ].filter((part): part is string => Boolean(part))
 
   return `${comment}\n\n[fix ${id}] ${context.join(' · ')}`
 }
 
-/** How the pane names what was pressed: the `.fixable` name, else what accessibility said. */
-export function pressedLabel({ element, accessibility, screen }: Pick<FixReport, 'element' | 'accessibility' | 'screen'>) {
+/** How the pane names what was pressed: the element's name, else what accessibility or the app said. */
+export function pressedLabel({
+  element,
+  accessibility,
+  view,
+  screen,
+}: Pick<FixReport, 'element' | 'accessibility' | 'screen'> & { view?: string | null }) {
   if (element) return element
   if (accessibility) return describeAccessibility(accessibility)
+  if (view) return view
   return screen ? `${screen} screen` : 'unnamed element'
 }
 
