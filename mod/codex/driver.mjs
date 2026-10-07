@@ -33,7 +33,7 @@ export function codexQueue(session, prompt) {
  * @param {string} prompt
  */
 export function fixIdIn(prompt) {
-  return /\n\[fix (r\d+)\][^\n]*$/.exec(prompt.trimEnd())?.[1] ?? null
+  return /(?:^|\n)\[fix (r\d+)\][^\n]*$/.exec(prompt.trimEnd())?.[1] ?? null
 }
 
 /**
@@ -50,6 +50,11 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
   const statuses = new Map()
   /** @type {{ id: string, turn: string } | null} The report whose turn is running. */
   let current = null
+  /**
+   * @type {Map<string, string>} Each fix turn's report until its Stop or Interrupt. Async hooks
+   * run in shells of their own, so a turn's Stop may come after the next turn's prompt.
+   */
+  const turns = new Map()
   // One `codex queue` at a time, so reports reach the session in the order they came.
   let delivered = Promise.resolve()
 
@@ -63,11 +68,18 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
     if (statuses.size > 50) statuses.delete(statuses.keys().next().value)
   }
 
-  /** @param {boolean} answered */
-  function finish(answered) {
-    if (current === null) return
-    set(current.id, fixes.finished(statuses.get(current.id) ?? 'fixing', answered))
-    current = null
+  /**
+   * A fix turn has ended: by its own Stop or Interrupt, or, when the session has moved on to
+   * another turn first, as answered. Codex starts no queued turn after an interrupt, and a late
+   * Interrupt still corrects it.
+   * @param {string} turn
+   * @param {boolean} answered
+   */
+  function finish(turn, answered) {
+    const id = turns.get(turn)
+    if (id === undefined) return
+    set(id, fixes.finished(statuses.get(id) ?? 'fixing', answered))
+    if (current?.turn === turn) current = null
   }
 
   /** @param {Incoming} incoming */
@@ -95,12 +107,21 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
     if (session_id !== session || agent_id) return
     if (event === 'SessionEnd') return leave('the Codex session ended')
 
+    if (event === 'Stop' || event === 'Interrupt') {
+      finish(turn_id, event === 'Stop')
+      turns.delete(turn_id)
+      return
+    }
+
     if (event === 'UserPromptSubmit') {
-      // A turn that never got its Stop is over: the session has moved on.
-      finish(false)
+      // More input for the running turn changes nothing.
+      if (current?.turn === turn_id) return
+      if (current !== null) finish(current.turn, true)
       const id = fixIdIn(String(input.prompt ?? ''))
       if (id !== null && statuses.has(id)) {
         current = { id, turn: turn_id }
+        turns.set(turn_id, id)
+        if (turns.size > 50) turns.delete(turns.keys().next().value)
         set(id, fixes.started())
       }
       return
@@ -111,8 +132,6 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
       set(current.id, fixes.building())
     } else if (event === 'PostToolUse' && isBuildAndRun(String(tool_name))) {
       set(current.id, fixes.buildEnded(statuses.get(current.id) ?? 'fixing'))
-    } else if (event === 'Stop' || event === 'Interrupt') {
-      finish(event === 'Stop')
     }
   }
 
@@ -137,9 +156,10 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
       }
       if (req.method === 'GET' && url.pathname === '/codex/session') return answer(200, { session })
       if (req.method === 'POST' && url.pathname === '/codex/hook') {
-        const chunks = []
-        for await (const chunk of req) chunks.push(chunk)
         try {
+          // A hook killed mid-send aborts the body; that must not take the receiver down.
+          const chunks = []
+          for await (const chunk of req) chunks.push(chunk)
           hook(JSON.parse(Buffer.concat(chunks).toString('utf8')))
           return answer(200, {})
         } catch (error) {
