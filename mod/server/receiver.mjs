@@ -2,12 +2,16 @@
 // fixkit mod: one JSON line on stdout per event. Started by the mod with
 // $.process.spawn and killed with it. One receiver owns the port at a time: a
 // newer one asks the older one to leave. No dependencies beside AXe, which is
-// optional: it tells which element a report's touch landed on.
+// optional: it tells which element a report's touch landed on. A React Native app
+// sends no simulator and no screenshot: the receiver finds the one, takes the other,
+// and turns the app's stacks into source lines through Metro.
 import { createServer } from 'node:http'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
+import { sourcesFor, withSources } from './metro.mjs'
+import { bootedSimulator, captureScreen } from './simulator.mjs'
 
 const PORT = Number(process.env.FIXKIT_PORT ?? 4747)
 const dir = join(process.cwd(), '.fixkit')
@@ -22,6 +26,21 @@ const ACTIVE = new Set(['queued', 'fixing', 'rebuilding'])
 
 // The AXe that answered last; the search for one runs again only when it fails.
 let axe = null
+
+// Said once: with two simulators booted on one iOS version, a React Native report cannot tell which is its own.
+let toldSimulator = false
+
+/** The simulator a report came from: its own word, else for React Native the one booted on its iOS version. */
+async function simulatorOf(report) {
+  if (report.simulator) return report.simulator
+  if (report.platform !== 'react-native') return null
+  const { udid, booted } = await bootedSimulator(report.os).catch(() => ({ udid: null, booted: 0 }))
+  if (udid === null && booted > 1 && !toldSimulator) {
+    toldSimulator = true
+    emit({ type: 'notice', message: `Boot one simulator per iOS version: ${booted} run iOS ${report.os}, so reports come without a screenshot` })
+  }
+  return udid
+}
 
 /** The simulator's accessibility tree, through the AXe that answered last or the first that answers. */
 async function readTree(udid) {
@@ -112,21 +131,36 @@ const server = createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/report') {
     const chunks = []
     req.on('data', chunk => chunks.push(chunk))
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
-        const { screenshotPNG, ...report } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        const { screenshotPNG, stacks, ...sent } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
         const id = `r${++count}`
+        const simulator = await simulatorOf(sent)
+        const report = simulator ? { ...sent, simulator } : sent
         let screenshot = null
         if (screenshotPNG) {
           screenshot = join('.fixkit', 'reports', `${id}.png`)
           writeFileSync(join(process.cwd(), screenshot), Buffer.from(screenshotPNG, 'base64'))
+        } else if (simulator) {
+          // The app has drawn its outline and waits for the answer, so the screen is what was pressed.
+          const path = join('.fixkit', 'reports', `${id}.png`)
+          try {
+            await captureScreen(simulator, join(process.cwd(), path))
+            screenshot = path
+          } catch (error) {
+            process.stderr.write(`screenshot: ${error.message}\n`)
+          }
         }
-        // The answer waits for the lookup: until it comes the app takes no new long press,
-        // which would change the screen being read.
+        // The answer waits for the lookup and the sources: until it comes the app takes no new
+        // long press, which would change the screen being read.
         const accessibility = lookUp(id, report).catch(() => null)
-        void accessibility.then(() => reply(res, 200, { id }))
+        const sources = Array.isArray(stacks) && stacks.length > 0 ? sourcesFor(stacks).catch(() => null) : null
+        const ready = Promise.all([accessibility, sources])
+        void ready.then(() => reply(res, 200, { id }))
         delivered = delivered.then(async () => {
-          emit({ type: 'report', report: { ...report, id, screenshot, accessibility: await accessibility } })
+          const [found, located] = await ready
+          const element = withSources(report.element, located)
+          emit({ type: 'report', report: { ...report, ...(element && { element }), id, screenshot, accessibility: found } })
         })
       } catch (error) {
         reply(res, 400, { error: String(error) })
