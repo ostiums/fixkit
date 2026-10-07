@@ -304,6 +304,10 @@ test('the Codex plugin declares its hooks, only the session edges waiting on the
     const waits = event === 'SessionStart' || event === 'SessionEnd'
     for (const group of groups) {
       for (const handler of group.hooks) assert.equal(handler.async === true, !waits, event)
+      // Codex caps these two at 3 s and warns about anything longer.
+      if (event === 'SessionEnd' || event === 'Interrupt') {
+        for (const handler of group.hooks) assert.ok(handler.timeout <= 3, event)
+      }
       assert.equal(group.matcher, event.endsWith('ToolUse') ? 'build_run_sim$' : undefined, event)
     }
   }
