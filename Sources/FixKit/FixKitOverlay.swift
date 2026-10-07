@@ -83,7 +83,8 @@ struct FixComposerOverlay: View {
     /// The marked element and its source line, else the screen's name when the app gives one.
     private var title: String? {
         if let element = target.element {
-            return "\(element.name)  ·  \((element.file as NSString).lastPathComponent):\(element.line)"
+            guard let file = element.file, let line = element.line else { return element.name }
+            return "\(element.name)  ·  \((file as NSString).lastPathComponent):\(line)"
         }
         return target.screen.isEmpty ? nil : "\(target.screen) screen"
     }

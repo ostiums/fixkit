@@ -38,8 +38,9 @@ extension View {
 #if DEBUG
 struct FixElement: Equatable {
     let name: String
-    let file: String
-    let line: Int
+    /// Where a mark was declared; an element FixInspector named after its property has none.
+    let file: String?
+    let line: Int?
     var frame: CGRect
 }
 
@@ -50,6 +51,7 @@ final class FixRegistry {
 
     var screen = ""
     private var elements: [UUID: FixElement] = [:]
+    private var views: [ObjectIdentifier: ViewMark] = [:]
 
     func update(_ id: UUID, _ element: FixElement) {
         elements[id] = element
@@ -59,15 +61,55 @@ final class FixRegistry {
         elements[id] = nil
     }
 
+    /// Marks a UIKit view; its frame is read whenever a press asks, so nothing follows layout.
+    func mark(_ view: UIView, name: String, file: String, line: Int) {
+        views = views.filter { $0.value.view != nil }
+        views[ObjectIdentifier(view)] = ViewMark(view: view, name: name, file: file, line: line)
+    }
+
+    /// Every marked element on screen now, SwiftUI's and UIKit's.
+    private var onScreen: [FixElement] {
+        Array(elements.values) + views.values.compactMap(\.element)
+    }
+
     func element(named name: String) -> FixElement? {
-        elements.values.first { $0.name == name }
+        onScreen.first { $0.name == name }
     }
 
     /// The innermost element under the point: the smallest frame that contains it.
     func element(at point: CGPoint) -> FixElement? {
-        elements.values
+        onScreen
             .filter { $0.frame.contains(point) }
             .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+    }
+}
+
+/// A mark on a UIKit view, held weakly so a released view simply drops out.
+@MainActor
+private final class ViewMark {
+    weak var view: UIView?
+    let name: String
+    let file: String
+    let line: Int
+
+    init(view: UIView, name: String, file: String, line: Int) {
+        self.view = view
+        self.name = name
+        self.file = file
+        self.line = line
+    }
+
+    /// The view's frame in its window, while it is in one and nothing hides it.
+    var element: FixElement? {
+        guard let view, let window = view.window, view.isShown else { return nil }
+        return FixElement(name: name, file: file, line: line, frame: view.convert(view.bounds, to: window))
+    }
+}
+
+extension UIView {
+    /// Neither the view nor any view around it is hidden or fully transparent.
+    var isShown: Bool {
+        sequence(first: self, next: \.superview).allSatisfy { !$0.isHidden && $0.alpha > 0.01 }
     }
 }
 
