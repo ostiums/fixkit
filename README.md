@@ -144,7 +144,7 @@ In a UIKit app FixKit reads the views themselves, so an unmarked view is still n
 ```
 The name is cut off
 
-[fix r1] ProfileViewController.nameLabel · StaticText "Alex Morgan" · .fixkit/reports/r1.png
+[fix r1] ProfileViewController.nameLabel · UILabel "Alex Morgan" · .fixkit/reports/r1.png
 ```
 
 `@IBOutlet`s, `lazy var`s and arrays of views (`buttons[2]`) are found the same way. A press on a button's own label names the button. When no property holds the view, a local `let` in `viewDidLoad` say, the report carries `UILabel "Alex Morgan" · ProfileViewController screen`.

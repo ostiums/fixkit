@@ -9,7 +9,7 @@ extension UIView {
     @discardableResult
     public func fixable(_ name: String, file: String = #filePath, line: Int = #line) -> Self {
         #if DEBUG
-        FixRegistry.shared.mark(self, name: name, file: file, line: line)
+        FixRegistry.shared.mark(self, name: name, source: FixSource(file: file, line: line))
         #endif
         return self
     }

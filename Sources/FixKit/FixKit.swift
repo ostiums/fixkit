@@ -36,22 +36,31 @@ extension View {
 }
 
 #if DEBUG
-struct FixElement: Equatable {
-    let name: String
-    /// Where a mark was declared; an element FixInspector named after its property has none.
-    let file: String?
-    let line: Int?
-    var frame: CGRect
+/// Where a mark was declared.
+struct FixSource: Equatable {
+    let file: String
+    let line: Int
 }
 
-/// The marked elements currently on screen, with their frames in window coordinates.
+struct FixElement: Equatable {
+    let name: String
+    /// Where a mark was declared; a UIKit view named after the property that holds it has none.
+    let source: FixSource?
+    var frame: CGRect
+
+    /// Of overlapping elements, the innermost has the smallest frame.
+    var area: CGFloat { frame.width * frame.height }
+}
+
+/// The marked elements: SwiftUI's with their frames in window coordinates as layout changes,
+/// UIKit's by the view, whose frame is read when a press asks.
 @MainActor
 final class FixRegistry {
     static let shared = FixRegistry()
 
     var screen = ""
     private var elements: [UUID: FixElement] = [:]
-    private var views: [ObjectIdentifier: ViewMark] = [:]
+    private var marks: [ObjectIdentifier: ViewMark] = [:]
 
     func update(_ id: UUID, _ element: FixElement) {
         elements[id] = element
@@ -61,62 +70,59 @@ final class FixRegistry {
         elements[id] = nil
     }
 
-    /// Marks a UIKit view; its frame is read whenever a press asks, so nothing follows layout.
-    func mark(_ view: UIView, name: String, file: String, line: Int) {
-        views = views.filter { $0.value.view != nil }
-        views[ObjectIdentifier(view)] = ViewMark(view: view, name: name, file: file, line: line)
-    }
-
-    /// Every marked element on screen now, SwiftUI's and UIKit's.
-    private var onScreen: [FixElement] {
-        Array(elements.values) + views.values.compactMap(\.element)
-    }
-
-    func element(named name: String) -> FixElement? {
-        onScreen.first { $0.name == name }
-    }
-
-    /// The innermost element under the point: the smallest frame that contains it. Given the
-    /// window, a UIKit mark counts only on the path of the view a touch there would reach, so a
-    /// mark on the screen under a sheet does not win a press inside the sheet.
-    func element(at point: CGPoint, in window: UIWindow? = nil) -> FixElement? {
-        let hit = window?.hitTest(point, with: nil)
-        let marks = views.values.filter { mark in
-            guard let hit, let view = mark.view else { return true }
-            return hit.isDescendant(of: view) || view.isDescendant(of: hit)
+    func mark(_ view: UIView, name: String, source: FixSource) {
+        // Released views leave entries behind; a cell marked on every reuse must not pay for a sweep each time.
+        if marks.count.isMultiple(of: 64) {
+            marks = marks.filter { $0.value.view != nil }
         }
-        return (Array(elements.values) + marks.compactMap(\.element))
-            .filter { $0.frame.contains(point) }
-            .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        marks[ObjectIdentifier(view)] = ViewMark(view: view, name: name, source: source)
+    }
+
+    /// The mark on this very view, with its frame in its window now.
+    func mark(on view: UIView) -> FixElement? {
+        guard let mark = marks[ObjectIdentifier(view)], mark.view === view, let window = view.window else { return nil }
+        return FixElement(name: mark.name, source: mark.source, frame: view.frame(in: window))
+    }
+
+    /// A marked element on screen, by its name: what a scripted press aims at.
+    func element(named name: String) -> FixElement? {
+        if let element = elements.values.first(where: { $0.name == name }) { return element }
+        let found = marks.values.first { $0.name == name && $0.view?.isShown == true }
+        return found?.view.flatMap(mark(on:))
+    }
+
+    /// The innermost SwiftUI mark under the point. UIKit marks are found along the pressed view's
+    /// superviews instead, by FixInspector.
+    func element(at point: CGPoint) -> FixElement? {
+        elements.values.filter { $0.frame.contains(point) }.min { $0.area < $1.area }
     }
 }
 
 /// A mark on a UIKit view, held weakly so a released view simply drops out.
-@MainActor
-private final class ViewMark {
+private struct ViewMark {
     weak var view: UIView?
     let name: String
-    let file: String
-    let line: Int
-
-    init(view: UIView, name: String, file: String, line: Int) {
-        self.view = view
-        self.name = name
-        self.file = file
-        self.line = line
-    }
-
-    /// The view's frame in its window, while it is in one and nothing hides it.
-    var element: FixElement? {
-        guard let view, let window = view.window, view.isShown else { return nil }
-        return FixElement(name: name, file: file, line: line, frame: view.convert(view.bounds, to: window))
-    }
+    let source: FixSource
 }
 
 extension UIView {
-    /// Neither the view nor any view around it is hidden or fully transparent.
+    /// The view and the views around it, up to and including its window.
+    var ancestors: some Sequence<UIView> {
+        sequence(first: self, next: \.superview)
+    }
+
+    /// The view itself is neither hidden nor fully transparent.
+    var isVisible: Bool {
+        !isHidden && alpha > 0.01
+    }
+
+    /// Nothing hides the view: neither it nor any view around it.
     var isShown: Bool {
-        sequence(first: self, next: \.superview).allSatisfy { !$0.isHidden && $0.alpha > 0.01 }
+        ancestors.allSatisfy(\.isVisible)
+    }
+
+    func frame(in window: UIWindow) -> CGRect {
+        convert(bounds, to: window)
     }
 }
 
@@ -130,7 +136,8 @@ private struct FixableModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                FixRegistry.shared.update(id, FixElement(name: name, file: file, line: line, frame: frame))
+                FixRegistry.shared.update(
+                    id, FixElement(name: name, source: FixSource(file: file, line: line), frame: frame))
             }
             .onDisappear { FixRegistry.shared.remove(id) }
     }

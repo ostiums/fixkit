@@ -78,9 +78,9 @@ struct FixInspectorTests {
         let finding = inspect(40, 130)
         #expect(finding.element?.name == "ProfileViewController.nameLabel")
         #expect(finding.element?.frame == CGRect(x: 20, y: 120, width: 200, height: 30))
-        #expect(finding.element?.file == nil)
+        #expect(finding.element?.source == nil)
         #expect(finding.screen == "ProfileViewController")
-        #expect(finding.view == #"UILabel "Alex Morgan""#)
+        #expect(finding.viewDescription == #"UILabel "Alex Morgan""#)
     }
 
     @Test func namesACustomViewProperty() {
@@ -96,7 +96,7 @@ struct FixInspectorTests {
         let title = try #require(controller.payButton.titleLabel)
         let point = title.convert(CGPoint(x: title.bounds.midX, y: title.bounds.midY), to: window)
         #expect(inspect(point.x, point.y).element?.name == "ProfileViewController.payButton")
-        #expect(inspect(point.x, point.y).view == #"UIButton "Pay""#)
+        #expect(inspect(point.x, point.y).viewDescription == #"UIButton "Pay""#)
     }
 
     @Test func namesAWeakOutlet() {
@@ -111,14 +111,14 @@ struct FixInspectorTests {
         let finding = inspect(40, 410)
         #expect(finding.element == nil)
         #expect(finding.screen == "ProfileViewController")
-        #expect(finding.view == #"UILabel "Local""#)
+        #expect(finding.viewDescription == #"UILabel "Local""#)
     }
 
     @Test func hiddenViewsAreSkipped() {
         controller.nameLabel.isHidden = true
         let finding = inspect(40, 130)
         #expect(finding.element?.name != "ProfileViewController.nameLabel")
-        #expect(finding.view != #"UILabel "Alex Morgan""#)
+        #expect(finding.viewDescription != #"UILabel "Alex Morgan""#)
     }
 
     @Test func aContainerThatPassesTouchesThroughIsLookedPast() {
@@ -133,7 +133,7 @@ struct FixInspectorTests {
         controller.view.addSubview(button)
         window.layoutIfNeeded()
 
-        #expect(inspect(280, 420).view == #"UIButton "Top up""#)
+        #expect(inspect(280, 420).viewDescription == #"UIButton "Top up""#)
     }
 
     @Test func aViewWithoutTextIsDescribedByItsAccessibilityLabel() {
@@ -142,7 +142,26 @@ struct FixInspectorTests {
         close.accessibilityLabel = "Close"
         controller.view.addSubview(close)
 
-        #expect(inspect(320, 520).view == #"UIButton "Close""#)
+        #expect(inspect(320, 520).viewDescription == #"UIButton "Close""#)
+    }
+
+    @Test func aMarkWinsOverTheProperty() {
+        controller.nameLabel.fixable("profile.name")
+        let element = inspect(40, 130).element
+        #expect(element?.name == "profile.name")
+        #expect(element?.source?.file.hasSuffix("FixInspectorTests.swift") == true)
+    }
+
+    @Test func theNearestOfAMarkAndAPropertyWins() {
+        controller.header.fixable("profile.header")
+        #expect(inspect(30, 20).element?.name == "ProfileHeaderView.titleLabel")
+        #expect(inspect(300, 70).element?.name == "profile.header")
+    }
+
+    @Test func aMarkUnderASheetDoesNotWin() {
+        controller.nameLabel.fixable("profile.name")
+        window.addSubview(UIView(frame: CGRect(x: 0, y: 100, width: 400, height: 700)))
+        #expect(inspect(40, 130).element == nil)
     }
 
     @Test func aSwiftUIScreenGivesNothing() {
@@ -154,6 +173,6 @@ struct FixInspectorTests {
         let finding = FixInspector.inspect(at: CGPoint(x: 200, y: 400), in: window)
         #expect(finding.element == nil)
         #expect(finding.screen == nil)
-        #expect(finding.view == nil)
+        #expect(finding.viewDescription == nil)
     }
 }

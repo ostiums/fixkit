@@ -34,7 +34,7 @@ export type Incoming = {
     line?: number
   }
   /** UIKit only: the pressed view's class and text, as the app sees it. */
-  view?: string
+  viewDescription?: string
   accessibility?: Accessibility | null
 }
 
@@ -45,7 +45,7 @@ export type FixReport = {
   element: string | null
   accessibility: Accessibility | null
   /** UIKit only: the pressed view's class and text. */
-  view: string | null
+  viewDescription: string | null
   /** `path:line` of the element's declaration, relative to the project. */
   source: string | null
   screen: string
