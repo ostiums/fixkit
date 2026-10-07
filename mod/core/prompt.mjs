@@ -49,6 +49,40 @@ When a prompt carries that line:
 - Save the change and do not rebuild: Metro's Fast Refresh puts it on screen, which counts the report as fixed. Rebuild only when the change touches native code or native configuration, with the project's own command (npx expo run:ios, npx react-native run-ios).
 - Answer in one or two sentences: what was wrong and what changed.`
 
+/** What a `[fix …]` prompt calls for in a Flutter project, in place of `INSTRUCTIONS`. */
+export const FLUTTER_INSTRUCTIONS = `# Fix requests from the running app
+
+A prompt that ends with a line like
+
+[fix r1] ProfileHeader › Text · lib/profile_header.dart:24 · used at lib/home.dart:31 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
+[fix r2] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · .fixkit/reports/r2.png
+
+was sent from the Flutter app running in the iOS simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the app's widget around it and the widget itself; the file and line where that widget is constructed; where the widgets around it are used; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); and a screenshot with the element outlined in red, or a red ring where the finger was.
+
+When a prompt carries that line:
+- Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
+- With a file and line, start there: the cause is in that constructor call, in the widget around it, or in what is passed where that widget is used.
+- Without one, find the widget by searching the app's .dart sources for its label and the labels beside it; a label made from data (an amount, a date) is found through the widget that formats it, so search the neighbouring fixed labels first.
+- Make the smallest change that does what was asked. Do not refactor.
+- Open the screenshot only when the text and the code leave the request unclear.
+- Save the change and call the hot_reload tool: it puts the change on screen, which counts the report as fixed. Pass restart: true when hot reload does not apply the change: a change to initState, field initializers, global or static variables, main, or an enum or generic type. When it fails, run dart analyze on the files you changed, fix what it reports and call it again. Rebuild with flutter run only when the change touches native code or native configuration.
+- Answer in one or two sentences: what was wrong and what changed.`
+
+/** The tool the mod serves in a Flutter project: hot reload, or restart, the app `flutter run` runs. */
+export const HOT_RELOAD_TOOL = 'mcp__fixkit__hot_reload'
+
+/** @typedef {'native' | 'react-native' | 'flutter'} ProjectKind */
+
+/**
+ * Flutter when pubspec.yaml depends on the Flutter SDK, React Native when package.json depends on it, else native.
+ * @param {{ packageJson: string | null, pubspec: string | null }} files
+ * @returns {ProjectKind}
+ */
+export function projectKind({ packageJson, pubspec }) {
+  if (pubspec !== null && /^\s+sdk:\s*flutter\s*$/m.test(pubspec)) return 'flutter'
+  return isReactNativeProject(packageJson) ? 'react-native' : 'native'
+}
+
 /**
  * Whether the project's package.json depends on React Native.
  * @param {string | null} packageJson
@@ -133,10 +167,11 @@ export function pressedLabel(report) {
 }
 
 /**
- * Whether a tool call is XcodeBuildMCP's build-and-run, during which the pane shows the report
- * as rebuilding. Whether the fix reached the screen comes from the app itself, when it launches.
+ * Whether a tool call puts a new build on screen: XcodeBuildMCP's build-and-run, or the mod's own
+ * hot reload in a Flutter project. The pane shows the report as rebuilding meanwhile; whether the
+ * fix reached the screen comes from the app itself, when it launches or reloads.
  * @param {string} tool
  */
 export function isBuildAndRun(tool) {
-  return /(?:^|_)build_run_sim$/.test(tool)
+  return tool === HOT_RELOAD_TOOL || /(?:^|_)build_run_sim$/.test(tool)
 }
