@@ -140,6 +140,8 @@ let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
 
 The `fixkit` npm package brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.80+ (React 19.1, whose development builds record where each element's JSX is written) with the New Architecture.
 
+![In Expo Go, a long press on a card holder's name cut off to "Alex…" sends "The name is cut off" to Claude Code; Claude removes a fixed width in WalletCard.tsx and Fast Refresh shows "Alex Morgan" with the banner "Fixed by Claude Code"](docs/demo-react-native.gif)
+
 Native apps never see it: the Swift package is unchanged, and the mod switches to its React Native instructions only in a project whose `package.json` depends on `react-native`.
 
 ```bash
