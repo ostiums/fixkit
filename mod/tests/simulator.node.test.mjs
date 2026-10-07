@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtempSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -115,4 +116,43 @@ test("a React Native report's stacks stay in the receiver; without Metro its ele
   assert.equal(report.screenshot, null)
   assert.deepEqual(report.element, element)
   assert.equal(report.platform, 'react-native')
+})
+
+test('a React Native app that names its bundle at launch gets its stacks read from the map of that bundle', async () => {
+  // A stand-in for Metro: the map of the bundle the app launched with, and a /symbolicate that has
+  // moved on since, as it does after a Fast Refresh.
+  const metro = createServer((req, res) => {
+    if (req.url.startsWith('/kept.map')) {
+      res.end(JSON.stringify({ version: 3, sources: ['/app/src/Card.tsx'], names: [], mappings: 'AAAA;AACA' }))
+    } else {
+      res.writeHead(500).end()
+    }
+  })
+  await new Promise(resolve => metro.listen(0, '127.0.0.1', resolve))
+  const bundle = `http://127.0.0.1:${metro.address().port}/kept.bundle?platform=ios`
+  const port = 47_000 + Math.floor(Math.random() * 1000)
+  const { events, until, stop } = await receiver(port)
+  try {
+    await fetch(`http://127.0.0.1:${port}/launched`, { method: 'POST', body: JSON.stringify({ bundle }) })
+    await new Promise(resolve => setTimeout(resolve, 300))
+    const sent = {
+      platform: 'react-native',
+      os: '27.0',
+      comment: 'Too small',
+      screen: '',
+      touch: { x: 1, y: 2 },
+      simulator: 'NO-SUCH-SIMULATOR',
+      element: { name: 'Card › Text', frame: { x: 0, y: 0, width: 10, height: 10 } },
+      stacks: [`Error: react-stack-top-frame\n    at Card (${bundle}:2:4)`],
+    }
+    await fetch(`http://127.0.0.1:${port}/report`, { method: 'POST', body: JSON.stringify(sent) })
+    await until(() => events.some(event => event.type === 'report'))
+
+    const { report } = events.find(event => event.type === 'report')
+    assert.equal(report.element.file, '/app/src/Card.tsx')
+    assert.equal(report.element.line, 2)
+  } finally {
+    stop()
+    metro.close()
+  }
 })

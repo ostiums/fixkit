@@ -25,5 +25,9 @@ export async function sendReport(body: object) {
 
 export const statusOf = (id: string) => call<FixStatus>(`/status?id=${encodeURIComponent(id)}`, undefined, 3_000)
 
-/** Says the app is up with its latest code; answers the report Claude is working on, else the newest. */
-export const launched = () => call<FixStatus>('/launched', { method: 'POST' }, 3_000)
+/**
+ * Says the app is up with its latest code; answers the report Claude is working on, else the newest.
+ * At launch it names the bundle it runs, whose source map the receiver keeps.
+ */
+export const launched = (bundle: string | null) =>
+  call<FixStatus>('/launched', { method: 'POST', body: bundle ? JSON.stringify({ bundle }) : undefined }, 3_000)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Animated, StyleSheet, View, type GestureResponderEvent } from 'react-native'
 
+import { bundleFrom } from './bundle'
 import { hold, installHold, release } from './hold'
 import { inspectAt } from './inspect'
 import { Overlay } from './overlay'
@@ -48,7 +49,7 @@ export function FixKitHost({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     install()
-    void announceLaunch()
+    void announceLaunch(bundleFrom(new Error().stack))
   }, [])
 
   useEffect(() => {

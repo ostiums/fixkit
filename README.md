@@ -136,7 +136,7 @@ let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
 
 ## React Native
 
-`react-native-fixkit` brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.78+ (React 19) with the New Architecture.
+`react-native-fixkit` brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.80+ (React 19.1, whose development builds record where each element's JSX is written) with the New Architecture.
 
 Native apps never see it: the Swift package is unchanged, and the mod switches to its React Native instructions only in a project whose `package.json` depends on `react-native`.
 
@@ -167,7 +167,8 @@ Nothing has to be marked. React records where each element's JSX is written, so 
 - **No rebuild.** Claude saves the file, Fast Refresh puts it on screen and the report turns live. Claude rebuilds only for a change to native code.
 - **`testID`s show up** in accessibility's description as `#id`.
 - **The pressed button stays still.** While FixKit holds a press, `Pressable`, the `Touchable` components, `Button` and pressable `Text` neither long-press nor press on release. For that FixKit wraps React Native's private `Pressability` in development, and Metro warns once about the deep import. Gesture Handler's native buttons are not held.
-- **The receiver does the native parts.** It takes the screenshot with `simctl` and asks Metro for the source lines. With several simulators booted on the same iOS version it cannot tell which one runs the app, and reports come without a screenshot.
+- **Lines come from the code the app launched with.** Once Fast Refresh has changed a file, its lines in later reports can be a few off until the next reload; Claude is told to look around them.
+- **The receiver does the native parts.** It takes the screenshot with `simctl` and reads the source lines from the map Metro served with the bundle. With several simulators booted on the same iOS version it cannot tell which one runs the app, and reports come without a screenshot.
 - **Not covered yet:** presses inside a native `Modal` or a natively presented screen, and Android, where `<FixKitHost>` renders its children and nothing else.
 - **Release bundles** contain none of it: Metro drops the host with `__DEV__`.
 
