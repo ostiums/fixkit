@@ -157,17 +157,13 @@ struct FixKitHostModifier: ViewModifier {
 final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     static let shared = FixGesture()
 
-    private var recognizer: UILongPressGestureRecognizer?
     private var competing: [UIGestureRecognizer] = []
 
     func install(on window: UIWindow) {
-        guard recognizer == nil else { return }
-
         let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(pressed))
         recognizer.minimumPressDuration = 0.5
         recognizer.delegate = self
         window.addGestureRecognizer(recognizer)
-        self.recognizer = recognizer
     }
 
     @objc private func pressed(_ recognizer: UILongPressGestureRecognizer) {
@@ -189,15 +185,14 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     func report(at point: CGPoint, in window: UIWindow? = nil) {
         guard let window = window ?? FixHost.shared.appWindow else { return }
         let finding = FixInspector.inspect(at: point, in: window)
-        // The innermost wins; on a tie the mark, which knows its source line.
-        let element = [FixRegistry.shared.element(at: point, in: window), finding.element]
-            .compactMap { $0 }
-            .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        // A UIKit view is found along the view hierarchy; SwiftUI marks have only their frames.
+        let element = finding.element ?? FixRegistry.shared.element(at: point)
         let named = FixRegistry.shared.screen
         FixSession.shared.begin(
             FixTarget(
                 element: element, touch: point, screen: named.isEmpty ? finding.screen ?? "" : named,
-                view: finding.view, screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
+                viewDescription: finding.viewDescription,
+                screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
     }
 
     /// The window as it looks now, with the reported element outlined in red, or a red ring

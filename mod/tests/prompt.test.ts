@@ -73,7 +73,7 @@ test('a UIKit view named after its property leads with that name', () => {
       screen: 'ProfileViewController',
       screenshot: '.fixkit/reports/r4.png',
       element: { name: 'ProfileViewController.nameLabel' },
-      view: 'UILabel "Alex Morgan"',
+      viewDescription: 'UILabel "Alex Morgan"',
       accessibility: { element: { ...amount.element, label: 'Alex Morgan' }, within: null, nearby: [] },
     },
     null,
@@ -81,18 +81,34 @@ test('a UIKit view named after its property leads with that name', () => {
 
   expect(prompt).toBe(
     'The name is cut off\n\n' +
-      '[fix r4] ProfileViewController.nameLabel · StaticText "Alex Morgan" · .fixkit/reports/r4.png',
+      '[fix r4] ProfileViewController.nameLabel · UILabel "Alex Morgan" · .fixkit/reports/r4.png',
   )
 })
 
-test("without accessibility, the app's own description of the view stands in", () => {
+test("in a UIKit app the app's own description wins over accessibility, which can read a view under a sheet", () => {
+  const prompt = promptFor(
+    {
+      id: 'r6',
+      comment: 'Too close to the edge',
+      screen: 'SheetViewController',
+      screenshot: null,
+      viewDescription: 'UIView',
+      accessibility: { element: { ...amount.element, type: 'Button', label: 'Pay' }, within: null, nearby: [] },
+    },
+    null,
+  )
+
+  expect(prompt).toBe('Too close to the edge\n\n[fix r6] UIView · SheetViewController screen')
+})
+
+test("without accessibility, the app's own description of the view still names it", () => {
   const prompt = promptFor(
     {
       id: 'r5',
       comment: 'Make it bold',
       screen: 'ProfileViewController',
       screenshot: '.fixkit/reports/r5.png',
-      view: 'UILabel "Alex Morgan"',
+      viewDescription: 'UILabel "Alex Morgan"',
       accessibility: null,
     },
     null,
@@ -117,15 +133,15 @@ test('an icon is described with the control around it and its value', () => {
 })
 
 test('the pane names a marked element, else what accessibility said, else the screen', () => {
-  expect(pressedLabel({ element: 'home.quickActions.send', accessibility: amount, screen: 'Home' })).toBe('home.quickActions.send')
-  expect(pressedLabel({ element: null, accessibility: amount, screen: 'Activity' })).toBe(
+  expect(pressedLabel({ element: 'home.quickActions.send', accessibility: amount, viewDescription: null, screen: 'Home' })).toBe('home.quickActions.send')
+  expect(pressedLabel({ element: null, accessibility: amount, viewDescription: null, screen: 'Activity' })).toBe(
     'StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September"',
   )
-  expect(pressedLabel({ element: null, accessibility: null, screen: 'Activity' })).toBe('Activity screen')
-  expect(pressedLabel({ element: null, accessibility: null, view: 'UILabel "Alex Morgan"', screen: 'ProfileViewController' })).toBe(
+  expect(pressedLabel({ element: null, accessibility: null, viewDescription: null, screen: 'Activity' })).toBe('Activity screen')
+  expect(pressedLabel({ element: null, accessibility: null, viewDescription: 'UILabel "Alex Morgan"', screen: 'ProfileViewController' })).toBe(
     'UILabel "Alex Morgan"',
   )
-  expect(pressedLabel({ element: null, accessibility: null, screen: '' })).toBe('unnamed element')
+  expect(pressedLabel({ element: null, accessibility: null, viewDescription: null, screen: '' })).toBe('unnamed element')
 })
 
 test("XcodeBuildMCP's build-and-run shows as rebuilding, whatever server name it has", () => {

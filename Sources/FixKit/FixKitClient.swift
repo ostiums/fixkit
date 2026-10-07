@@ -7,7 +7,7 @@ struct FixTarget {
     let touch: CGPoint
     let screen: String
     /// The pressed UIKit view's class and text, when the app's own view controller holds it.
-    let view: String?
+    let viewDescription: String?
     let screenshot: Data?
 }
 
@@ -49,14 +49,14 @@ enum FixKitClient {
                     "width": element.frame.width.rounded(), "height": element.frame.height.rounded(),
                 ],
             ]
-            if let file = element.file, let line = element.line {
-                fields["file"] = file
-                fields["line"] = line
+            if let source = element.source {
+                fields["file"] = source.file
+                fields["line"] = source.line
             }
             body["element"] = fields
         }
-        if let view = target.view {
-            body["view"] = view
+        if let viewDescription = target.viewDescription {
+            body["viewDescription"] = viewDescription
         }
         if let screenshot = target.screenshot {
             body["screenshotPNG"] = screenshot.base64EncodedString()

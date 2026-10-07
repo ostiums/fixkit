@@ -45,18 +45,6 @@ final class FixHost {
         }
     }
 
-    /// The app's view controller that decides one side of the status bar, its style or its
-    /// visibility: each is handed down its own chain of children.
-    static func statusBarController(
-        from root: UIViewController?, child: KeyPath<UIViewController, UIViewController?>
-    ) -> UIViewController? {
-        var controller = root
-        while let current = controller, let next = current.presentedViewController ?? current[keyPath: child] {
-            controller = next
-        }
-        return controller
-    }
-
     /// Slides the app up so the keyboard does not cover the pressed element.
     func lift(to height: CGFloat) {
         guard let appWindow else { return }
@@ -104,7 +92,19 @@ final class FixOverlayController: UIHostingController<FixOverlay> {
     }
 
     private func appController(child: KeyPath<UIViewController, UIViewController?>) -> UIViewController? {
-        FixHost.statusBarController(from: FixHost.shared.appWindow?.rootViewController, child: child)
+        Self.statusBarController(from: FixHost.shared.appWindow?.rootViewController, child: child)
+    }
+
+    /// The app's view controller that decides one side of the status bar, its style or its
+    /// visibility: each is handed down its own chain of children.
+    static func statusBarController(
+        from root: UIViewController?, child: KeyPath<UIViewController, UIViewController?>
+    ) -> UIViewController? {
+        var controller = root
+        while let current = controller, let next = current.presentedViewController ?? current[keyPath: child] {
+            controller = next
+        }
+        return controller
     }
 }
 

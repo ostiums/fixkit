@@ -10,11 +10,11 @@ private final class ContainerViewController: UIViewController {
 }
 
 @MainActor
-struct FixHostTests {
+struct FixOverlayTests {
     @Test func statusBarStyleAndVisibilityFollowTheirOwnChildren() {
         let container = ContainerViewController()
 
-        #expect(FixHost.statusBarController(from: container, child: \UIViewController.childForStatusBarHidden) === container.child)
-        #expect(FixHost.statusBarController(from: container, child: \UIViewController.childForStatusBarStyle) === container)
+        #expect(FixOverlayController.statusBarController(from: container, child: \UIViewController.childForStatusBarHidden) === container.child)
+        #expect(FixOverlayController.statusBarController(from: container, child: \UIViewController.childForStatusBarStyle) === container)
     }
 }

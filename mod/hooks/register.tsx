@@ -55,7 +55,7 @@ async function accept($: EngineInterface, incoming: Incoming) {
     comment: incoming.comment,
     element: incoming.element?.name ?? null,
     accessibility: incoming.accessibility ?? null,
-    view: incoming.view ?? null,
+    viewDescription: incoming.viewDescription ?? null,
     source,
     screen: incoming.screen,
     screenshot: incoming.screenshot,
