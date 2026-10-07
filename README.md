@@ -14,7 +14,7 @@
 2. **The report lands** in the Claude Code session already running in your project: the element, a screenshot, your words.
 3. **Claude fixes the code** and relaunches the app, while a banner follows the fix: `queued → fixing → rebuilding → live`.
 
-FixKit has two parts: the **fixkit mod** for Claude Code receives reports, and the app sends them from a debug build: the **FixKit Swift package** from a SwiftUI or UIKit app, the **react-native-fixkit** npm package from a React Native one. Release builds contain none of it.
+FixKit has two parts: the **fixkit mod** for Claude Code receives reports, and the app sends them from a debug build: the **FixKit Swift package** from a SwiftUI or UIKit app, the **fixkit** npm package from a React Native one. Release builds contain none of it.
 
 ## Quick start
 
@@ -138,18 +138,18 @@ let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
 
 ## React Native
 
-`react-native-fixkit` brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.80+ (React 19.1, whose development builds record where each element's JSX is written) with the New Architecture.
+The `fixkit` npm package brings the same flow to a React Native app in the iOS simulator. It is TypeScript with no native code, so it works in Expo Go as well as in a development build. It needs React Native 0.80+ (React 19.1, whose development builds record where each element's JSX is written) with the New Architecture.
 
 Native apps never see it: the Swift package is unchanged, and the mod switches to its React Native instructions only in a project whose `package.json` depends on `react-native`.
 
 ```bash
-npm install --save-dev react-native-fixkit
+npm install --save-dev fixkit
 ```
 
 Wrap the app's root, once:
 
 ```tsx
-import { FixKitHost } from 'react-native-fixkit'
+import { FixKitHost } from 'fixkit'
 
 export default function App() {
   return (

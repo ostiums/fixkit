@@ -8,6 +8,6 @@ const fixkit = path.resolve(__dirname, '..')
 
 config.watchFolders = [fixkit]
 config.resolver.nodeModulesPaths = [path.join(__dirname, 'node_modules')]
-config.resolver.extraNodeModules = { 'react-native-fixkit': fixkit }
+config.resolver.extraNodeModules = { fixkit }
 
 module.exports = config

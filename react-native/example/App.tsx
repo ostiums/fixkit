@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { FixKitHost } from 'react-native-fixkit'
+import { FixKitHost } from 'fixkit'
 
 import { QuickActions } from './src/QuickActions'
 import { Transactions } from './src/Transactions'
