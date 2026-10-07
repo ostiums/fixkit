@@ -89,9 +89,9 @@ function Composer({ target, draft, lift }: { target: Target; draft: string; lift
         onLayout={event => setLift(liftFor(elementBottom, event.nativeEvent.layout.y))}
       >
         <Text style={styles.sparkle}>✦</Text>
+        {/* Uncontrolled: a value written back on every keystroke reorders fast typing. */}
         <TextInput
           autoFocus
-          value={draft}
           onChangeText={setDraft}
           onSubmitEditing={() => void send()}
           placeholder="What should Claude fix here?"
