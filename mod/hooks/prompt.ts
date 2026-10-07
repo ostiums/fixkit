@@ -63,7 +63,7 @@ export function pressedLabel({
   accessibility,
   view,
   screen,
-}: Pick<FixReport, 'element' | 'accessibility' | 'screen'> & { view?: string | null }) {
+}: Pick<FixReport, 'element' | 'accessibility' | 'screen'> & Partial<Pick<FixReport, 'view'>>) {
   if (element) return element
   if (accessibility) return describeAccessibility(accessibility)
   if (view) return view

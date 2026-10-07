@@ -190,7 +190,7 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
         guard let window = window ?? FixHost.shared.appWindow else { return }
         let finding = FixInspector.inspect(at: point, in: window)
         // The innermost wins; on a tie the mark, which knows its source line.
-        let element = [FixRegistry.shared.element(at: point), finding.element]
+        let element = [FixRegistry.shared.element(at: point, in: window), finding.element]
             .compactMap { $0 }
             .min { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
         let named = FixRegistry.shared.screen

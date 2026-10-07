@@ -136,6 +136,15 @@ struct FixInspectorTests {
         #expect(inspect(280, 420).view == #"UIButton "Top up""#)
     }
 
+    @Test func aViewWithoutTextIsDescribedByItsAccessibilityLabel() {
+        let close = UIButton(frame: CGRect(x: 300, y: 500, width: 44, height: 44))
+        close.setImage(UIImage(systemName: "xmark"), for: .normal)
+        close.accessibilityLabel = "Close"
+        controller.view.addSubview(close)
+
+        #expect(inspect(320, 520).view == #"UIButton "Close""#)
+    }
+
     @Test func aSwiftUIScreenGivesNothing() {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         window.rootViewController = UIHostingController(rootView: Text("Home"))
