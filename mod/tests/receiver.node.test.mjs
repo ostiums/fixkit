@@ -142,3 +142,22 @@ test('with --codex the receiver serves its Codex session and prints nothing', as
   assert.deepEqual(await receiver.get('/codex/session'), { session: 'S1' })
   assert.deepEqual(receiver.lines, [])
 })
+
+test('a reload before any Flutter app launched says so', async t => {
+  const receiver = await startReceiver()
+  t.after(receiver.stop)
+
+  assert.deepEqual(await receiver.post('/reload', {}), { ok: false, error: 'No Flutter app with FixKit has launched in this session' })
+})
+
+test('a reload goes to the VM service the Flutter app sent at launch', async t => {
+  // The app's VM service is gone, so the receiver finds the app not running.
+  const receiver = await startReceiver()
+  t.after(receiver.stop)
+
+  await receiver.post('/launched', { vmService: 'http://127.0.0.1:9/x=/' })
+  assert.deepEqual(await receiver.post('/reload', { restart: true }), {
+    ok: false,
+    error: 'The Flutter app is not running: start it with flutter run',
+  })
+})

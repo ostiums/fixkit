@@ -6,11 +6,13 @@
 // newer one asks the older one to leave. No dependencies beside AXe, which is
 // optional: it tells which element a report's touch landed on. A React Native app
 // sends no simulator and no screenshot: the receiver finds the one, takes the other,
-// and turns the app's stacks into source lines through Metro.
+// and turns the app's stacks into source lines through Metro. A Flutter app sends its VM service
+// at launch, through which the receiver hot reloads it for the mod's hot_reload tool.
 import { createServer } from 'node:http'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+import { NO_APP, reload } from './flutter.mjs'
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
 import { bundleMap, parseStack, sourcesFor, withSources } from './metro.mjs'
 import { bootedSimulator, captureScreen } from './simulator.mjs'
@@ -52,6 +54,9 @@ let axe = null
 // or of null. A Fast Refresh changes the bundle Metro serves but not the code the app runs, so its
 // stacks are read with the map of launch.
 const maps = new Map()
+
+// The VM service of the Flutter app that launched last, which `POST /reload` hot reloads.
+let flutterApp = null
 
 /** Keeps the map of the bundle a React Native app launched with, the one its stack's first frame runs from. */
 function keepMap(stack) {
@@ -193,8 +198,15 @@ const server = createServer(async (req, res) => {
   // The answer is the report Claude is working on (reports are worked through in order), else
   // the newest one, for the app to follow or announce.
   if (req.method === 'POST' && url.pathname === '/launched') {
-    // A React Native app sends a stack from the bundle it launched with; a Swift app sends nothing.
-    void readBody(req).then(body => keepMap(JSON.parse(body).stack)).catch(() => {})
+    // A React Native app sends a stack from the bundle it launched with, a Flutter app its VM
+    // service; a Swift app sends nothing.
+    void readBody(req)
+      .then(body => {
+        const sent = JSON.parse(body)
+        keepMap(sent.stack)
+        if (typeof sent.vmService === 'string') flutterApp = sent.vmService
+      })
+      .catch(() => {})
     emit({ type: 'launched' })
     const all = statuses()
     const id = Object.keys(all).find(key => ACTIVE.has(all[key])) ?? (count > 0 ? `r${count}` : null)
@@ -208,6 +220,20 @@ const server = createServer(async (req, res) => {
       error => reply(res, 400, { error: String(error) }),
     )
     delivered = delivered.then(() => ready.then(report => emit({ type: 'report', report }), () => {}))
+    return
+  }
+
+  // The mod's hot_reload tool: reload, or restart, the Flutter app that launched last.
+  if (req.method === 'POST' && url.pathname === '/reload') {
+    void readBody(req)
+      .then(body => JSON.parse(body || '{}'))
+      .catch(() => ({}))
+      .then(sent =>
+        flutterApp === null
+          ? { ok: false, error: NO_APP }
+          : reload(flutterApp, { restart: sent?.restart === true }).then(() => ({ ok: true }), error => ({ ok: false, error: error.message })),
+      )
+      .then(answer => reply(res, 200, answer))
     return
   }
 
