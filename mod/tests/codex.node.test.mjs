@@ -5,8 +5,40 @@ import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
+import { spawn } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
+
+import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../core/prompt.mjs'
 import { codexDriver, codexQueue } from '../codex/driver.mjs'
-import { project } from './receiver.mjs'
+import { appProject } from '../codex/project.mjs'
+import { freePort, project, until } from './receiver.mjs'
+
+const SESSION_START = new URL('../codex/session-start.mjs', import.meta.url).pathname
+
+/** A folder tree: each key a path, a string value a file's text, null a folder. */
+function tree(files) {
+  const root = project()
+  for (const [path, text] of Object.entries(files)) {
+    if (text === null) mkdirSync(join(root, path), { recursive: true })
+    else {
+      mkdirSync(join(root, path, '..'), { recursive: true })
+      writeFileSync(join(root, path), text)
+    }
+  }
+  return root
+}
+
+/** Runs the SessionStart hook as Codex does: in the session's folder, its input on stdin. */
+function sessionStart(cwd, session, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [SESSION_START], { cwd, env: { ...process.env, ...env } })
+    let out = ''
+    child.stdout.on('data', chunk => (out += chunk))
+    child.on('error', reject)
+    child.on('exit', code => resolve({ code, out }))
+    child.stdin.end(JSON.stringify({ hook_event_name: 'SessionStart', session_id: session, cwd, source: 'startup' }))
+  })
+}
 
 const BUILD = 'mcp__XcodeBuildMCP__build_run_sim'
 const settle = () => new Promise(resolve => setTimeout(resolve, 10))
@@ -192,4 +224,72 @@ test('codex queue gets the session and the message as one argument each, whateve
     '--thread=S',
     '--message=-v is "wrong"\n\n[fix r1] home.send',
   ])
+})
+
+test('an app project is found from a folder inside it, up to the git root', () => {
+  const ios = tree({ '.git': null, 'Tally.xcodeproj': null, 'Tally/App': null })
+  assert.deepEqual(appProject(join(ios, 'Tally/App')), { packageJson: null })
+  assert.deepEqual(appProject(tree({ 'Package.swift': '' })), { packageJson: null })
+
+  const rn = tree({ '.git': null, 'package.json': '{"dependencies":{"react-native":"0.81.0"}}', 'ios/App.xcodeproj': null })
+  assert.match(appProject(rn).packageJson, /react-native/)
+})
+
+test('anything else is no app project', () => {
+  assert.equal(appProject(tree({ '.git': null, 'package.json': '{"dependencies":{"react":"19"}}' })), null)
+  assert.equal(appProject(tree({ '.git': null })), null)
+  // The git root is the edge: an app above it belongs to another project.
+  const outer = tree({ 'Outer.xcodeproj': null, 'inner/.git': null })
+  assert.equal(appProject(join(outer, 'inner')), null)
+})
+
+test('in an app project the session starts its receiver once and gets the instructions', async t => {
+  const cwd = tree({ '.git': null, 'Tally.xcodeproj': null })
+  const port = await freePort()
+  const url = path => `http://127.0.0.1:${port}${path}`
+  const env = { FIXKIT_PORT: String(port) }
+  const end = session => fetch(url('/codex/hook'), { method: 'POST', body: JSON.stringify({ hook_event_name: 'SessionEnd', session_id: session }) })
+
+  const first = await sessionStart(cwd, 'S1', env)
+  assert.equal(first.code, 0)
+  assert.deepEqual(JSON.parse(first.out), {
+    hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: INSTRUCTIONS },
+  })
+  const answer = await until(() => fetch(url('/codex/session')).then(res => res.json(), () => null))
+  t.after(() => end('S2').catch(() => {}))
+  assert.deepEqual(answer, { session: 'S1' })
+  const { run } = await fetch(url('/status')).then(res => res.json())
+
+  // A resumed or compacted session keeps the receiver it has.
+  await sessionStart(cwd, 'S1', env)
+  assert.equal((await fetch(url('/status')).then(res => res.json())).run, run)
+
+  // Another session in the project takes the reports over.
+  await sessionStart(cwd, 'S2', env)
+  await until(() => fetch(url('/codex/session')).then(res => res.json(), () => null).then(one => one?.session === 'S2'))
+})
+
+test('a React Native project gets its own instructions', async t => {
+  const cwd = tree({ 'package.json': '{"dependencies":{"react-native":"0.81.0"}}' })
+  const port = await freePort()
+  t.after(() =>
+    fetch(`http://127.0.0.1:${port}/codex/hook`, {
+      method: 'POST',
+      body: JSON.stringify({ hook_event_name: 'SessionEnd', session_id: 'S' }),
+    }).catch(() => {}),
+  )
+
+  const { out } = await sessionStart(cwd, 'S', { FIXKIT_PORT: String(port) })
+  assert.equal(JSON.parse(out).hookSpecificOutput.additionalContext, RN_INSTRUCTIONS)
+  await until(() => fetch(`http://127.0.0.1:${port}/codex/session`).then(res => res.ok, () => false))
+})
+
+test('outside an app project the session gets nothing and nothing starts', async () => {
+  const port = await freePort()
+  const { code, out } = await sessionStart(tree({ '.git': null }), 'S', { FIXKIT_PORT: String(port) })
+
+  assert.equal(code, 0)
+  assert.equal(out, '')
+  await new Promise(resolve => setTimeout(resolve, 300))
+  await assert.rejects(fetch(`http://127.0.0.1:${port}/status`))
 })
