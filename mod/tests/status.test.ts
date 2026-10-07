@@ -1,7 +1,7 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
-import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
+import { FLUTTER_INSTRUCTIONS, INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
 
 // The test runner has timers; the hooks module's own environment, typed here, does not.
 declare function setTimeout(callback: () => void, ms: number): unknown
@@ -28,10 +28,16 @@ function receiverLines() {
   }
 }
 
-/** The world beneath the mod: a receiver the test drives, and the statuses the mod publishes. */
-function world(on: On, packageJson: string | null = null) {
+/**
+ * The world beneath the mod: a receiver the test drives, the project's `files`, the statuses the mod
+ * publishes, the tools it registers and what it fetches.
+ */
+function world(on: On, files: Record<string, string> = {}) {
   const receiver = receiverLines()
   const statuses: Record<string, string>[] = []
+  const registered: string[] = []
+  const fetched: { url: string; body: string | undefined }[] = []
+  let reloadAnswer = JSON.stringify({ ok: true })
   let submitted: () => void = () => {}
   const submission = new Promise<void>(resolve => (submitted = resolve))
 
@@ -48,9 +54,19 @@ function world(on: On, packageJson: string | null = null) {
     submitted()
     return { text: e.text }
   })
-  on('fs.read', async () => {
-    if (packageJson === null) throw new Error('ENOENT')
-    return { value: packageJson }
+  // The mod reads the project's files by their names in the working directory.
+  on('fs.read', async (_$, e) => {
+    const name = e.path.split('/').pop() ?? e.path
+    if (!(name in files)) throw new Error('ENOENT')
+    return { value: files[name] }
+  })
+  on('tool.register', async (_$, e) => {
+    registered.push(e.name)
+    return { value: { tool: `mcp__fixkit__${e.name}` } }
+  })
+  on('http.fetch', async (_$, e) => {
+    fetched.push({ url: e.url, body: e.init?.body })
+    return { value: { status: 200, ok: true, headers: {}, text: reloadAnswer } }
   })
   on('fs.write', async (_$, e) => {
     if (e.path.endsWith('status.json')) statuses.push(JSON.parse(e.text))
@@ -59,7 +75,7 @@ function world(on: On, packageJson: string | null = null) {
   on('tool.call', async () => ({ result: 'built and launched' }))
   on('turn.complete', async () => ({ text: '' }))
 
-  return { receiver, statuses, submission }
+  return { receiver, statuses, submission, registered, fetched, answerReload: (text: string) => (reloadAnswer = text) }
 }
 
 /** Waits until the mod has done what a receiver line asked for. */
@@ -106,7 +122,7 @@ const composing = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outpu
 
 test('a React Native project gets the React Native instructions', async ($, on) => {
   const app = JSON.stringify({ dependencies: { 'react-native': '0.86.3' } })
-  world(on, app)
+  world(on, { 'package.json': app })
   on('prompt.compose', async () => ({ sections: [] }))
   await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
   const { sections } = await $.prompt.compose(composing)
@@ -121,4 +137,56 @@ test('without a package.json the instructions are the iOS ones', async ($, on) =
   const { sections } = await $.prompt.compose(composing)
 
   expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(INSTRUCTIONS)
+})
+
+const pubspec = 'name: wallet\ndependencies:\n  flutter:\n    sdk: flutter\n'
+
+test('a Flutter project gets the Flutter instructions and the hot_reload tool', async ($, on) => {
+  const { registered } = world(on, { 'pubspec.yaml': pubspec })
+  on('prompt.compose', async () => ({ sections: [] }))
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  const { sections } = await $.prompt.compose(composing)
+
+  expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(FLUTTER_INSTRUCTIONS)
+  expect(registered).toEqual(['hot_reload'])
+})
+
+test('a native project registers no tool', async ($, on) => {
+  const { registered } = world(on)
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+
+  expect(registered).toEqual([])
+})
+
+test('hot_reload asks the receiver, and the reload it causes makes the fix live', async ($, on) => {
+  const { receiver, statuses, submission, fetched } = world(on, { 'pubspec.yaml': pubspec })
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  receiver.send({ type: 'ready', port: 4757 })
+  receiver.send(report)
+  await submission
+  await until(() => statuses.at(-1)?.r1 === 'fixing')
+
+  const { result } = await $.tool.call({ tool: 'mcp__fixkit__hot_reload', restart: true })
+  receiver.send({ type: 'launched' })
+  await until(() => statuses.at(-1)?.r1 === 'live')
+
+  expect(fetched).toEqual([{ url: 'http://127.0.0.1:4757/reload', body: JSON.stringify({ restart: true }) }])
+  expect(String(result)).toContain('Restarted')
+  expect(statuses.map(all => all.r1)).toEqual(['queued', 'fixing', 'rebuilding', 'live'])
+})
+
+test("a failed reload is the tool's error, and the report goes back to fixing", async ($, on) => {
+  const { receiver, statuses, submission, answerReload } = world(on, { 'pubspec.yaml': pubspec })
+  answerReload(JSON.stringify({ ok: false, error: 'The reload failed, most likely a compile error: run dart analyze on the changed files' }))
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  receiver.send({ type: 'ready', port: 4757 })
+  receiver.send(report)
+  await submission
+  await until(() => statuses.at(-1)?.r1 === 'fixing')
+
+  const result = await $.tool.call({ tool: 'mcp__fixkit__hot_reload' })
+
+  expect(result.isError).toBe(true)
+  expect(result.text).toContain('dart analyze')
+  expect(statuses.at(-1)?.r1).toBe('fixing')
 })

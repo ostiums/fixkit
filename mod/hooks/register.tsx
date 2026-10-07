@@ -3,7 +3,17 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { FixReport, FixStatus, Incoming, Receiver } from '../types'
 import * as fixes from '../core/fixes.mjs'
-import { INSTRUCTIONS, RN_INSTRUCTIONS, isBuildAndRun, isReactNativeProject, pressedLabel, promptFor } from './prompt'
+import {
+  FLUTTER_INSTRUCTIONS,
+  HOT_RELOAD_TOOL,
+  INSTRUCTIONS,
+  RN_INSTRUCTIONS,
+  isBuildAndRun,
+  pressedLabel,
+  projectKind,
+  promptFor,
+  type ProjectKind,
+} from './prompt'
 
 const PANE = 'fix-queue'
 const TITLE = 'Fix queue'
@@ -31,16 +41,25 @@ const LOOK: Record<FixStatus, { mark: string; label: string; color: string }> = 
   stopped: { mark: '✘', label: 'not rebuilt', color: 'red' },
 }
 
-// In a React Native project a fix goes live through Fast Refresh, not a rebuild.
-const RN_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: 'not applied' } }
+// In a React Native or Flutter project a fix goes live through a reload, not a rebuild.
+const RELOAD_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: 'not applied' } }
+
+const INSTRUCTIONS_FOR: Record<ProjectKind, string> = {
+  native: INSTRUCTIONS,
+  'react-native': RN_INSTRUCTIONS,
+  flutter: FLUTTER_INSTRUCTIONS,
+}
 
 const isActive = (report: FixReport) => fixes.isActive(report.status)
 
 let cwd = ''
 // The report whose turn is running; its prompt was submitted by this mod.
 let current: string | null = null
-// Whether the project's package.json depends on React Native: it picks the system prompt section and the pane's words.
-let reactNative = false
+// What the project in the working directory is built with: it picks the system prompt section, the
+// pane's words and, in a Flutter project, the hot_reload tool.
+let kind: ProjectKind = 'native'
+// The receiver's port, once it listens: the hot_reload tool asks it.
+let port: number | null = null
 
 function relative(path: string) {
   return cwd && path.startsWith(cwd + '/') ? path.slice(cwd.length + 1) : path
@@ -110,6 +129,7 @@ async function listen($: EngineInterface) {
       for (const line of lines.filter(Boolean)) {
         const event = JSON.parse(line) as ReceiverEvent
         if (event.type === 'ready') {
+          port = event.port
           await update($, receiver, (): Receiver => ({ state: 'listening', detail: `127.0.0.1:${event.port}` }))
         } else if (event.type === 'error') {
           await update($, receiver, (): Receiver => ({ state: 'failed', detail: event.message }))
@@ -137,7 +157,20 @@ async function listen($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    reactNative = isReactNativeProject(await $.fs.read('package.json').catch(() => null))
+    const readFile = (path: string) => $.fs.read(path).catch(() => null)
+    kind = projectKind({ packageJson: await readFile('package.json'), pubspec: await readFile('pubspec.yaml') })
+    if (kind === 'flutter') {
+      await $.tool.register({
+        name: 'hot_reload',
+        description:
+          'Hot reloads the Flutter app that flutter run runs in the simulator, so saved changes to its Dart code show on screen. restart: true hot restarts it instead, for changes hot reload does not apply. Fails with the reason, a compile error most likely.',
+        inputSchema: {
+          type: 'object',
+          properties: { restart: { type: 'boolean', description: 'Hot restart instead of hot reload' } },
+        },
+        isDeferred: false,
+      })
+    }
     await $.command.register({
       name: 'fix-queue',
       description: 'Show the fix requests sent from the app in the simulator',
@@ -162,7 +195,7 @@ export const register: Register = on => {
     const composed = await next(e)
 
     return {
-      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: reactNative ? RN_INSTRUCTIONS : INSTRUCTIONS, scope: 'session' }],
+      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: INSTRUCTIONS_FOR[kind], scope: 'session' }],
     }
   })
 
@@ -197,6 +230,25 @@ export const register: Register = on => {
 
     return next(e)
   }).catch(($, e, next) => next(e))
+
+  // The hot_reload tool, through the receiver, which holds the Flutter app's VM service. Registered
+  // inside the hook above, which shows the report as rebuilding meanwhile.
+  on('tool.call', { tool: HOT_RELOAD_TOOL }, async ($, e) => {
+    const restart = (e as { restart?: unknown }).restart === true
+    let answer: { ok: boolean; error?: string }
+    try {
+      if (port === null) throw new Error('The fixkit receiver is not listening yet')
+      const { text } = await $.http.fetch(`http://127.0.0.1:${port}/reload`, { method: 'POST', body: JSON.stringify({ restart }) })
+      answer = JSON.parse(text)
+    } catch (error) {
+      answer = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    if (!answer.ok) {
+      const text = answer.error ?? 'The reload failed'
+      return { isError: true, result: text, text }
+    }
+    return { result: restart ? 'Restarted the app: the change is on screen.' : 'Reloaded the app: the change is on screen.' }
+  })
 
   on('turn.complete', async ($, e, next) => {
     const id = current
@@ -244,7 +296,7 @@ export const register: Register = on => {
         )}
 
         {list.slice(-room).map(report => {
-          const look = (reactNative ? RN_LOOK : LOOK)[report.status]
+          const look = (kind === 'native' ? LOOK : RELOAD_LOOK)[report.status]
           const seconds = Math.max(0, Math.round(((report.finishedAt ?? clock) - report.receivedAt) / 1000))
 
           return (
