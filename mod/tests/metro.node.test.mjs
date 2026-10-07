@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { appFrame, parseStack, sourcesFor, withSources } from '../server/metro.mjs'
+import { appFrame, bundleMap, decodeMap, originalPosition, parseStack, sourcesFor, withSources } from '../server/metro.mjs'
 
 const BUNDLE = 'http://127.0.0.1:8081/index.ts.bundle//&platform=ios&dev=true'
 const stack = (...frames) => ['Error: react-stack-top-frame', ...frames].join('\n')
@@ -92,4 +92,53 @@ test('sources join the element the app named', () => {
   assert.equal(withSources(element, null), element)
   assert.equal(withSources(undefined, { source: { file: '/a.tsx', line: 3 }, usedAt: [] }), undefined)
   assert.deepEqual(withSources(element, { source: null, usedAt: [] }), element)
+})
+
+// Line 1 maps column 0 to a.tsx:1; line 2 maps column 0 to a.tsx:2 and column 4 to b.tsx:11, which is ignored.
+const MAP_JSON = {
+  version: 3,
+  sources: ['/app/a.tsx', '/app/node_modules/b.js'],
+  x_google_ignoreList: [1],
+  names: [],
+  mappings: 'AAAA;AACA,ICSA',
+}
+
+test('a source map decodes into original lines, ignored sources collapsed', () => {
+  const map = decodeMap(MAP_JSON)
+
+  assert.deepEqual(originalPosition(map, 1, 0), { file: '/app/a.tsx', lineNumber: 1, collapse: false })
+  assert.deepEqual(originalPosition(map, 2, 2), { file: '/app/a.tsx', lineNumber: 2, collapse: false })
+  assert.deepEqual(originalPosition(map, 2, 9), { file: '/app/node_modules/b.js', lineNumber: 11, collapse: true })
+  assert.equal(originalPosition(map, 7, 0), null)
+})
+
+test("the bundle's own map is fetched from beside it, with the query kept", async () => {
+  const asked = []
+  const fetchImpl = async url => {
+    asked.push(url)
+    return { ok: true, json: async () => MAP_JSON }
+  }
+  await bundleMap('http://127.0.0.1:8081/index.bundle?platform=ios&dev=true', fetchImpl)
+  await bundleMap('http://127.0.0.1:8081/index.ts.bundle//&platform=ios&dev=true', fetchImpl)
+
+  assert.deepEqual(asked, [
+    'http://127.0.0.1:8081/index.map?platform=ios&dev=true',
+    'http://127.0.0.1:8081/index.ts.map//&platform=ios&dev=true',
+  ])
+})
+
+test('frames of a bundle whose map was kept at launch are read from that map, the others from Metro', async () => {
+  // After a Fast Refresh Metro answers for the bundle as it is now, which can be lines away from the
+  // code the app still runs; the map kept at launch matches it.
+  const { asked, fetchImpl } = metro()
+  const kept = 'http://127.0.0.1:8081/kept.bundle'
+  const maps = new Map([[kept, decodeMap(MAP_JSON)]])
+  const found = await sourcesFor(
+    [stack(`    at Card (${kept}:2:3)`), stack(at('App', 93059))],
+    fetchImpl,
+    maps,
+  )
+
+  assert.deepEqual(found, { source: { file: '/app/a.tsx', line: 2 }, usedAt: [{ file: '/app/App.tsx', line: 31 }] })
+  assert.equal(asked.length, 1)
 })

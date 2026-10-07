@@ -33,7 +33,7 @@ was sent from the React Native app running in the iOS simulator by the fixkit mo
 
 When a prompt carries that line:
 - Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
-- With a file and line, start there: the cause is on that element, in the component around it, or in the props passed where that component is used.
+- With a file and line, start there: the cause is on that element, in the component around it, or in the props passed where that component is used. The line is read from the code the app launched with, so when that file has changed since, look around it.
 - Without one, find the element by searching the app's .tsx, .ts, .jsx and .js sources for its label, its testID and the labels beside it; a label made from data (an amount, a date) is found through the component that formats it, so search the neighbouring fixed labels first.
 - Make the smallest change that does what was asked. Do not refactor.
 - Open the screenshot only when the text and the code leave the request unclear.

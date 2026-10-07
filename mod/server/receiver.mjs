@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
-import { sourcesFor, withSources } from './metro.mjs'
+import { bundleMap, sourcesFor, withSources } from './metro.mjs'
 import { bootedSimulator, captureScreen } from './simulator.mjs'
 
 const PORT = Number(process.env.FIXKIT_PORT ?? 4747)
@@ -26,6 +26,24 @@ const ACTIVE = new Set(['queued', 'fixing', 'rebuilding'])
 
 // The AXe that answered last; the search for one runs again only when it fails.
 let axe = null
+
+// The maps of the bundles React Native apps launched with, by bundle URL. A Fast Refresh changes the
+// bundle Metro serves but not the code the app runs, so its stacks are read with the map of launch.
+const maps = new Map()
+
+/** Keeps the map of the bundle a React Native app says it launched with. */
+function keepMap(body) {
+  let bundle
+  try {
+    bundle = JSON.parse(body).bundle
+  } catch {
+    return
+  }
+  if (typeof bundle !== 'string') return
+  bundleMap(bundle)
+    .then(map => maps.set(bundle, map))
+    .catch(error => process.stderr.write(`source map: ${error.message}\n`))
+}
 
 // Said once: with two simulators booted on one iOS version, a React Native report cannot tell which is its own.
 let toldSimulator = false
@@ -122,6 +140,9 @@ const server = createServer((req, res) => {
   // The answer is the report Claude is working on (reports are worked through in order), else
   // the newest one, for the app to follow or announce.
   if (req.method === 'POST' && url.pathname === '/launched') {
+    const chunks = []
+    req.on('data', chunk => chunks.push(chunk))
+    req.on('end', () => keepMap(Buffer.concat(chunks).toString('utf8')))
     emit({ type: 'launched' })
     const all = statuses()
     const id = Object.keys(all).find(key => ACTIVE.has(all[key])) ?? (count > 0 ? `r${count}` : null)
@@ -154,7 +175,7 @@ const server = createServer((req, res) => {
         // The answer waits for the lookup and the sources: until it comes the app takes no new
         // long press, which would change the screen being read.
         const accessibility = lookUp(id, report).catch(() => null)
-        const sources = Array.isArray(stacks) && stacks.length > 0 ? sourcesFor(stacks).catch(() => null) : null
+        const sources = Array.isArray(stacks) && stacks.length > 0 ? sourcesFor(stacks, fetch, maps).catch(() => null) : null
         const ready = Promise.all([accessibility, sources])
         void ready.then(() => reply(res, 200, { id }))
         delivered = delivered.then(async () => {

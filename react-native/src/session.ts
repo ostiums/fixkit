@@ -81,11 +81,12 @@ export async function send() {
 /**
  * At launch and after every Fast Refresh: tells the receiver the app runs its latest code, which is
  * how the mod learns a fix is on screen, then follows the report Claude is working on. A report
- * already over shows nothing, so a later reload never repeats its banner.
+ * already over shows nothing, so a later reload never repeats its banner. `bundle` is given at
+ * launch only: a Fast Refresh does not reload the bundle.
  */
-export async function announceLaunch() {
+export async function announceLaunch(bundle: string | null = null) {
   try {
-    const { id, status } = await launched()
+    const { id, status } = await launched(bundle)
     if (id && status && status !== 'live' && status !== 'stopped') void follow(id)
   } catch {}
 }
