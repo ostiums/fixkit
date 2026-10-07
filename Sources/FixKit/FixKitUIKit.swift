@@ -14,3 +14,13 @@ extension UIView {
         return self
     }
 }
+
+extension UIWindow {
+    /// Installs the long-press gesture, the report composer and the status banners on this window.
+    /// Call once, on the app's main window, after `makeKeyAndVisible()`.
+    public func fixKitHost() {
+        #if DEBUG
+        FixHost.shared.install(on: self)
+        #endif
+    }
+}

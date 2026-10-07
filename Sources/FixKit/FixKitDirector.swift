@@ -72,7 +72,7 @@ final class FixDirector {
     }
 
     private func scroll(by distance: CGFloat) {
-        guard let window = FixGesture.shared.keyWindow, let scrollView = scrollView(in: window) else { return }
+        guard let window = FixHost.shared.appWindow, let scrollView = scrollView(in: window) else { return }
         let bottom = scrollView.contentSize.height + scrollView.adjustedContentInset.bottom - scrollView.bounds.height
         let y = min(max(bottom, 0), scrollView.contentOffset.y + distance)
         scrollView.setContentOffset(CGPoint(x: scrollView.contentOffset.x, y: y), animated: true)

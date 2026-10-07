@@ -143,33 +143,12 @@ final class FixSession {
 }
 
 struct FixKitHostModifier: ViewModifier {
-    @State private var session = FixSession.shared
-
     func body(content: Content) -> some View {
-        content
-            .offset(y: -session.lift)
-            .overlay {
-                if let target = session.target {
-                    FixComposerOverlay(target: target, session: session)
-                        .transition(.opacity)
-                }
+        content.task {
+            if let window = FixHost.keyWindow {
+                FixHost.shared.install(on: window)
             }
-            .overlay(alignment: .top) {
-                if let banner = session.banner {
-                    FixBanner(banner: banner)
-                        .padding(.top, 6)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier(fixKitIdentifier("banner"))
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .task {
-                FixGesture.shared.install()
-                if UserDefaults.standard.bool(forKey: FixDirector.switchKey) {
-                    FixDirector.shared.start()
-                }
-                await session.announceLaunch()
-            }
+        }
     }
 }
 
@@ -181,21 +160,14 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     private var recognizer: UILongPressGestureRecognizer?
     private var competing: [UIGestureRecognizer] = []
 
-    func install() {
-        guard recognizer == nil, let window = keyWindow else { return }
+    func install(on window: UIWindow) {
+        guard recognizer == nil else { return }
 
         let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(pressed))
         recognizer.minimumPressDuration = 0.5
         recognizer.delegate = self
         window.addGestureRecognizer(recognizer)
         self.recognizer = recognizer
-    }
-
-    var keyWindow: UIWindow? {
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-        return windows.first(where: \.isKeyWindow) ?? windows.first
     }
 
     @objc private func pressed(_ recognizer: UILongPressGestureRecognizer) {
@@ -215,7 +187,7 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
 
     /// Opens the composer for the element at the point, as a long press there does.
     func report(at point: CGPoint, in window: UIWindow? = nil) {
-        guard let window = window ?? keyWindow else { return }
+        guard let window = window ?? FixHost.shared.appWindow else { return }
         let finding = FixInspector.inspect(at: point, in: window)
         // The innermost wins; on a tie the mark, which knows its source line.
         let element = [FixRegistry.shared.element(at: point), finding.element]
