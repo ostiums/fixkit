@@ -18,7 +18,7 @@ export default function App() {
 }
 ```
 
-It needs the fixkit mod for Claude Code, React Native 0.78+ (React 19) with the New Architecture, and the iOS simulator. No native code: it works in Expo Go. Release bundles leave it out.
+It needs the fixkit mod for Claude Code, React Native 0.80+ (React 19.1) with the New Architecture, and the iOS simulator. No native code: it works in Expo Go. Release bundles leave it out.
 
 Setup, limits and how it works: [FixKit's README](https://github.com/ostiums/fixkit#react-native).
 

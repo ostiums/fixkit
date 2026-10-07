@@ -10,6 +10,6 @@
   "repository": { "type": "git", "url": "git+https://github.com/ostiums/fixkit.git", "directory": "react-native" },
   "homepage": "https://github.com/ostiums/fixkit#react-native",
   "keywords": ["react-native", "expo", "ios", "simulator", "claude-code"],
-  "peerDependencies": { "react": ">=19", "react-native": ">=0.78" },
+  "peerDependencies": { "react": ">=19.1", "react-native": ">=0.80" },
   "scripts": { "test": "node --test tests/*.test.ts" }
 }
