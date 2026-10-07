@@ -2,6 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { FixReport, FixStatus, Incoming, Receiver } from '../types'
+import * as fixes from '../core/fixes.mjs'
 import { INSTRUCTIONS, RN_INSTRUCTIONS, isBuildAndRun, isReactNativeProject, pressedLabel, promptFor } from './prompt'
 
 const PANE = 'fix-queue'
@@ -33,7 +34,7 @@ const LOOK: Record<FixStatus, { mark: string; label: string; color: string }> = 
 // In a React Native project a fix goes live through Fast Refresh, not a rebuild.
 const RN_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: 'not applied' } }
 
-const isActive = (report: FixReport) => report.status !== 'live' && report.status !== 'stopped'
+const isActive = (report: FixReport) => fixes.isActive(report.status)
 
 let cwd = ''
 // The report whose turn is running; its prompt was submitted by this mod.
@@ -81,13 +82,13 @@ async function accept($: EngineInterface, incoming: Incoming) {
   // As the person's own words: they typed the comment, and the engine adds no frame around it.
   await $.prompt.submit({ text: promptFor(incoming, source, usedAt), asUser: true })
   current = report.id
-  await patch($, report.id, one => ({ ...one, status: 'fixing' }))
+  await patch($, report.id, one => ({ ...one, status: fixes.started() }))
 }
 
 /** The app launched while Claude works on a report: whatever built it, the fix is on screen. */
 async function launched($: EngineInterface) {
   if (current !== null) {
-    await patch($, current, one => ({ ...one, status: 'live' }))
+    await patch($, current, one => ({ ...one, status: fixes.launched() }))
   }
 }
 
@@ -179,11 +180,11 @@ export const register: Register = on => {
     }
 
     if (isBuildAndRun(String(e.tool))) {
-      await patch($, id, one => ({ ...one, status: 'rebuilding' }))
+      await patch($, id, one => ({ ...one, status: fixes.building() }))
       const ran = await next(e)
       // A launch during the call has marked the report live; a failed call leaves it fixing.
       if (ran.deny !== undefined || ran.isError === true) {
-        await patch($, id, one => (one.status === 'rebuilding' ? { ...one, status: 'fixing' } : one))
+        await patch($, id, one => ({ ...one, status: fixes.buildEnded(one.status) }))
       }
 
       return ran
@@ -205,7 +206,7 @@ export const register: Register = on => {
       // Live only when the app launched with the fix and the turn ended with an answer.
       await patch($, id, one => ({
         ...one,
-        status: e.reason === 'answer' && one.status === 'live' ? 'live' : 'stopped',
+        status: fixes.finished(one.status, e.reason === 'answer'),
         finishedAt,
       }))
     }
