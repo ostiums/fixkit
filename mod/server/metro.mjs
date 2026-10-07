@@ -27,92 +27,117 @@ export function appFrame(frames) {
   return frame ? { file: frame.file, line: frame.lineNumber } : null
 }
 
-const DIGITS = new Map([...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'].map((c, i) => [c, i]))
+// Base64 digits by character code, for reading the map's VLQ fields.
+const DIGITS = new Int8Array(128)
+;[...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'].forEach((c, i) => {
+  DIGITS[c.charCodeAt(0)] = i
+})
 
 /**
- * A source map (version 3) made ready for lookups: per generated line, its segments as
- * [column, source, source line], both 0-based, in column order.
+ * Reads one generated line of a map's mappings from `at`, calling `segment(column, source,
+ * sourceLine)` for each mapped segment, and returns where the next line starts. `state` carries
+ * the source and source line, which run on from one line to the next.
  */
-export function decodeMap({ sources, mappings, x_google_ignoreList = [] }) {
-  const lines = [[]]
+function readLine(mappings, at, state, segment = () => {}) {
   let column = 0
-  let source = 0
-  let sourceLine = 0
-  let sourceColumn = 0
-  let fields = []
+  let field = 0
   let value = 0
   let shift = 0
-  const finish = () => {
-    if (fields.length === 0) return
-    column += fields[0]
-    if (fields.length >= 4) {
-      source += fields[1]
-      sourceLine += fields[2]
-      sourceColumn += fields[3]
-      lines.at(-1).push([column, source, sourceLine])
-    }
-    fields = []
+  const end = () => {
+    if (field >= 4) segment(column, state.source, state.line)
+    field = 0
   }
-  for (const char of mappings) {
+  for (; at < mappings.length; at++) {
+    const char = mappings[at]
     if (char === ';') {
-      finish()
-      lines.push([])
-      column = 0
-    } else if (char === ',') {
-      finish()
-    } else {
-      const digit = DIGITS.get(char)
-      value += (digit & 31) << shift
-      if (digit & 32) {
-        shift += 5
-      } else {
-        fields.push(value & 1 ? -(value >>> 1) : value >>> 1)
-        value = 0
-        shift = 0
-      }
+      end()
+      return at + 1
     }
+    if (char === ',') {
+      end()
+      continue
+    }
+    const digit = DIGITS[mappings.charCodeAt(at)]
+    value += (digit & 31) << shift
+    if (digit & 32) {
+      shift += 5
+      continue
+    }
+    const delta = value & 1 ? -(value >>> 1) : value >>> 1
+    if (field === 0) column += delta
+    else if (field === 1) state.source += delta
+    else if (field === 2) state.line += delta
+    field++
+    value = 0
+    shift = 0
   }
-  finish()
-  return { sources, ignored: new Set(x_google_ignoreList), lines }
+  end()
+  return at
+}
+
+/**
+ * A source map (version 3) made ready for lookups. Only where each generated line starts, and the
+ * source and source line it starts from, are kept; a lookup reads its one line.
+ */
+export function decodeMap({ sources, mappings, x_google_ignoreList = [] }) {
+  const starts = [0]
+  const sourceAt = [0]
+  const lineAt = [0]
+  const state = { source: 0, line: 0 }
+  for (let at = 0; at < mappings.length; ) {
+    at = readLine(mappings, at, state)
+    starts.push(at)
+    sourceAt.push(state.source)
+    lineAt.push(state.line)
+  }
+  return { sources, mappings, ignored: new Set(x_google_ignoreList), starts, sourceAt, lineAt }
 }
 
 /** Where a bundle position (1-based line, 0-based column) came from, as /symbolicate would say it. */
 export function originalPosition(map, line, column) {
+  const index = line - 1
+  if (index < 0 || index >= map.starts.length - 1) return null
   let found = null
-  for (const segment of map.lines[line - 1] ?? []) {
-    if (segment[0] > column) break
-    found = segment
-  }
+  const state = { source: map.sourceAt[index], line: map.lineAt[index] }
+  readLine(map.mappings, map.starts[index], state, (segmentColumn, source, sourceLine) => {
+    if (segmentColumn <= column) found = { source, sourceLine }
+  })
   if (found === null) return null
-  return { file: map.sources[found[1]], lineNumber: found[2] + 1, collapse: map.ignored.has(found[1]) }
+  return { file: map.sources[found.source], lineNumber: found.sourceLine + 1, collapse: map.ignored.has(found.source) }
 }
 
-/** The source map Metro serves beside a bundle: `.bundle` becomes `.map`, the rest stays. */
+async function fetchJson(url, init, timeout, fetchImpl) {
+  const response = await fetchImpl(url, { ...init, signal: AbortSignal.timeout(timeout) })
+  if (!response.ok) throw new Error(`${url} answered ${response.status}`)
+  return response.json()
+}
+
+/**
+ * The source map Metro serves beside a bundle: `.bundle` becomes `.map`, the options stay, and the
+ * sources' text, which only the lookup's caller has, is left out.
+ */
 export async function bundleMap(bundleUrl, fetchImpl = fetch) {
   const url = new URL(bundleUrl)
   url.pathname = url.pathname.replace(/\.bundle(?=\/|$)/, '.map')
-  const response = await fetchImpl(url.href, { signal: AbortSignal.timeout(30_000) })
-  if (!response.ok) throw new Error(`source map answered ${response.status}`)
-  return decodeMap(await response.json())
+  // Expo Go passes the bundle's options in the path, after `//&`.
+  if (url.pathname.includes('//&')) url.pathname += '&excludeSource=true'
+  else url.searchParams.set('excludeSource', 'true')
+  return decodeMap(await fetchJson(url.href, {}, 30_000, fetchImpl))
 }
 
 async function symbolicate(frames, fetchImpl) {
-  const response = await fetchImpl(`${new URL(frames[0].file).origin}/symbolicate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ stack: frames }),
-    signal: AbortSignal.timeout(5000),
-  })
-  if (!response.ok) throw new Error(`symbolicate answered ${response.status}`)
-  return (await response.json()).stack ?? []
+  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stack: frames }) }
+  return (await fetchJson(`${new URL(frames[0].file).origin}/symbolicate`, init, 5000, fetchImpl)).stack ?? []
 }
 
 /** The frames in the app's sources: from a kept map when there is one for their bundle, else from Metro. */
-async function locate(frames, fetchImpl, maps) {
-  const kept = frames.map(frame => {
-    const map = maps.get(frame.file)
-    return map ? (originalPosition(map, frame.lineNumber, frame.column) ?? {}) : null
-  })
+async function locate(frames, maps, fetchImpl) {
+  const kept = await Promise.all(
+    frames.map(async frame => {
+      const map = await maps.get(frame.file)
+      return map ? (originalPosition(map, frame.lineNumber, frame.column) ?? {}) : null
+    }),
+  )
   const rest = frames.filter((_, index) => kept[index] === null)
   const answered = rest.length > 0 ? await symbolicate(rest, fetchImpl).catch(() => []) : []
   let next = 0
@@ -121,16 +146,18 @@ async function locate(frames, fetchImpl, maps) {
 
 /**
  * Where the pressed element's JSX is written (`source`) and where the components around it are
- * used (`usedAt`, nearest first): the first stack is the element's, the others its owners'.
- * `maps` holds the decoded maps of the bundles apps launched with, by bundle URL.
+ * used (`usedAt`, nearest first): the first stack is the element's, the others its owners'. `maps`
+ * holds the maps of the bundles apps launched with, or promises of them, by bundle URL.
  */
-export async function sourcesFor(stacks, fetchImpl = fetch, maps = new Map()) {
-  const found = await Promise.all(
-    stacks.map(async stack => {
-      const frames = parseStack(stack)
-      return frames.length === 0 ? null : appFrame(await locate(frames, fetchImpl, maps))
-    }),
-  )
+export async function sourcesFor(stacks, { maps = new Map(), fetchImpl = fetch } = {}) {
+  const parsed = stacks.map(parseStack)
+  // One lookup for every stack: one request to Metro at most.
+  const located = await locate(parsed.flat(), maps, fetchImpl)
+  let next = 0
+  const found = parsed.map(frames => {
+    const mine = located.slice(next, (next += frames.length))
+    return frames.length === 0 ? null : appFrame(mine)
+  })
   const [source = null, ...owners] = found
   const key = ({ file, line }) => `${file}:${line}`
   const seen = new Set(source ? [key(source)] : [])

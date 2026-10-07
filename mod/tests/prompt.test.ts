@@ -5,12 +5,10 @@ import {
   INSTRUCTIONS,
   RN_INSTRUCTIONS,
   describeAccessibility,
-  instructionsFor,
   isBuildAndRun,
   isReactNativeProject,
   pressedLabel,
   promptFor,
-  stoppedLabel,
 } from '../hooks/prompt'
 
 const amount: Accessibility = {
@@ -166,7 +164,6 @@ test('a React Native element leads with its components, its JSX line and where i
     {
       id: 'r7',
       comment: 'The name is cut off',
-      platform: 'react-native',
       screen: '',
       screenshot: '.fixkit/reports/r7.png',
       element: { name: 'WalletCard › Text', file: '/p/src/WalletCard.tsx', line: 18, usedAt: [{ file: '/p/App.tsx', line: 31 }] },
@@ -182,7 +179,7 @@ test('a React Native element leads with its components, its JSX line and where i
   )
 })
 
-test('a React Native project gets its own instructions; any other keeps the iOS ones', () => {
+test('a package.json that depends on React Native makes a React Native project', () => {
   const app = JSON.stringify({ dependencies: { expo: '~57.0.27', react: '19.2.3', 'react-native': '0.86.3' } })
   expect(isReactNativeProject(app)).toBe(true)
   expect(isReactNativeProject(JSON.stringify({ devDependencies: { 'react-native': '0.86.3' } }))).toBe(true)
@@ -190,13 +187,6 @@ test('a React Native project gets its own instructions; any other keeps the iOS 
   expect(isReactNativeProject('not json')).toBe(false)
   expect(isReactNativeProject(null)).toBe(false)
 
-  expect(instructionsFor(app)).toBe(RN_INSTRUCTIONS)
-  expect(instructionsFor(null)).toBe(INSTRUCTIONS)
   expect(RN_INSTRUCTIONS).toContain('Fast Refresh')
   expect(INSTRUCTIONS).not.toContain('React Native')
-})
-
-test('a stopped report says why in its own platform’s words', () => {
-  expect(stoppedLabel('ios')).toBe('not rebuilt')
-  expect(stoppedLabel('react-native')).toBe('not applied')
 })

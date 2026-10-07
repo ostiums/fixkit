@@ -5,11 +5,16 @@ export function liftFor(elementBottom: number, composerTop: number) {
   return Math.max(0, elementBottom + 28 - composerTop)
 }
 
+/** The frame with `margin` around it, or without one a square of `radius` around the touch. */
+export function around(frame: Frame | null, touch: Point, margin: number, radius: number): Frame {
+  const [base, by] = frame ? [frame, margin] : [{ x: touch.x, y: touch.y, width: 0, height: 0 }, radius]
+  return { x: base.x - by, y: base.y - by, width: base.width + by * 2, height: base.height + by * 2 }
+}
+
 /** The lit area: the element's frame and 6 pt around it, or a square around the touch, moved with the app. */
 export function spotlight(frame: Frame | null, touch: Point, lift: number): Frame {
-  const base = frame ?? { x: touch.x, y: touch.y, width: 0, height: 0 }
-  const margin = frame ? 6 : 28
-  return { x: base.x - margin, y: base.y - lift - margin, width: base.width + margin * 2, height: base.height + margin * 2 }
+  const lit = around(frame, touch, 6, 28)
+  return { ...lit, y: lit.y - lift }
 }
 
 /** The four dimmed rectangles around the lit frame: above, below, left and right of it. */

@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { FixReport, FixStatus, Incoming, Receiver } from '../types'
-import { INSTRUCTIONS, instructionsFor, isBuildAndRun, pressedLabel, promptFor, stoppedLabel } from './prompt'
+import { INSTRUCTIONS, RN_INSTRUCTIONS, isBuildAndRun, isReactNativeProject, pressedLabel, promptFor } from './prompt'
 
 const PANE = 'fix-queue'
 const TITLE = 'Fix queue'
@@ -30,17 +30,23 @@ const LOOK: Record<FixStatus, { mark: string; label: string; color: string }> = 
   stopped: { mark: '✘', label: 'not rebuilt', color: 'red' },
 }
 
+// In a React Native project a fix goes live through Fast Refresh, not a rebuild.
+const RN_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: 'not applied' } }
+
 const isActive = (report: FixReport) => report.status !== 'live' && report.status !== 'stopped'
 
 let cwd = ''
 // The report whose turn is running; its prompt was submitted by this mod.
 let current: string | null = null
-// The system prompt section for this project: React Native's when its package.json says so.
-let instructions = INSTRUCTIONS
+// Whether the project's package.json depends on React Native: it picks the system prompt section and the pane's words.
+let reactNative = false
 
 function relative(path: string) {
   return cwd && path.startsWith(cwd + '/') ? path.slice(cwd.length + 1) : path
 }
+
+/** `path:line`, the path relative to the project. */
+const where = (file: string, line: number) => `${relative(file)}:${line}`
 
 /** Changes one report, then publishes every status for the app to poll. */
 async function patch($: EngineInterface, id: string, change: (report: FixReport) => FixReport) {
@@ -51,8 +57,8 @@ async function patch($: EngineInterface, id: string, change: (report: FixReport)
 
 async function accept($: EngineInterface, incoming: Incoming) {
   const { file, line } = incoming.element ?? {}
-  const source = file && line ? `${relative(file)}:${line}` : null
-  const usedAt = (incoming.element?.usedAt ?? []).map(({ file, line }) => `${relative(file)}:${line}`)
+  const source = file && line ? where(file, line) : null
+  const usedAt = (incoming.element?.usedAt ?? []).map(use => where(use.file, use.line))
   const report: FixReport = {
     id: incoming.id,
     comment: incoming.comment,
@@ -60,10 +66,8 @@ async function accept($: EngineInterface, incoming: Incoming) {
     accessibility: incoming.accessibility ?? null,
     viewDescription: incoming.viewDescription ?? null,
     source,
-    usedAt,
     screen: incoming.screen,
     screenshot: incoming.screenshot,
-    platform: incoming.platform ?? 'ios',
     status: 'queued',
     receivedAt: await $.clock.now(),
     finishedAt: null,
@@ -132,7 +136,7 @@ async function listen($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
-    instructions = instructionsFor(await $.fs.read('package.json').catch(() => null))
+    reactNative = isReactNativeProject(await $.fs.read('package.json').catch(() => null))
     await $.command.register({
       name: 'fix-queue',
       description: 'Show the fix requests sent from the app in the simulator',
@@ -157,7 +161,7 @@ export const register: Register = on => {
     const composed = await next(e)
 
     return {
-      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: instructions, scope: 'session' }],
+      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: reactNative ? RN_INSTRUCTIONS : INSTRUCTIONS, scope: 'session' }],
     }
   })
 
@@ -239,14 +243,14 @@ export const register: Register = on => {
         )}
 
         {list.slice(-room).map(report => {
-          const look = LOOK[report.status]
+          const look = (reactNative ? RN_LOOK : LOOK)[report.status]
           const seconds = Math.max(0, Math.round(((report.finishedAt ?? clock) - report.receivedAt) / 1000))
 
           return (
             <Box flexDirection="column" marginTop={1}>
               <Box justifyContent="space-between">
                 <Text color={look.color} bold>
-                  {look.mark} {report.id} {report.status === 'stopped' ? stoppedLabel(report.platform) : look.label}
+                  {look.mark} {report.id} {look.label}
                 </Text>
                 <Text dimColor>{seconds}s</Text>
               </Box>

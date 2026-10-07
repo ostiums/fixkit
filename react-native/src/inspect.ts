@@ -46,14 +46,13 @@ export function inspectAt(host: unknown, point: Point): Promise<Inspected> {
 
 function describe({ hierarchy = [], frame, closestInstance }: ViewData): Inspected {
   const name = elementName(hierarchy.map(entry => entry.name ?? '')) ?? 'View'
-  const element =
-    frame && frame.width > 0 && frame.height > 0
-      ? { name, frame: { x: frame.left, y: frame.top, width: frame.width, height: frame.height } }
-      : null
-  // The element's own stack, then its owners': where the component around it is used, and so on up.
-  const stacks: string[] = []
-  for (let fiber = closestInstance; fiber && stacks.length < 3; fiber = fiber._debugOwner ?? undefined) {
-    const stack = fiber._debugStack?.stack
+  const sized = frame && frame.width > 0 && frame.height > 0
+  const element = { name, frame: sized ? { x: frame.left, y: frame.top, width: frame.width, height: frame.height } : null }
+  // The element's own stack, empty when React kept none, then its owners': where the component
+  // around it is used, and so on up.
+  const stacks = [closestInstance?._debugStack?.stack ?? '']
+  for (let owner = closestInstance?._debugOwner; owner && stacks.length < 3; owner = owner._debugOwner) {
+    const stack = owner._debugStack?.stack
     if (stack) stacks.push(stack)
   }
   return { element, stacks }

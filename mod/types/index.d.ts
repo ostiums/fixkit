@@ -1,8 +1,5 @@
 export type FixStatus = 'queued' | 'fixing' | 'rebuilding' | 'live' | 'stopped'
 
-/** Where a report came from: a Swift app, or a React Native one through react-native-fixkit. */
-export type Platform = 'ios' | 'react-native'
-
 /** An accessibility element as the receiver summarises it. */
 export type AxElement = {
   type: string
@@ -24,8 +21,6 @@ export type Accessibility = {
 export type Incoming = {
   id: string
   comment: string
-  /** Sent by a React Native app; a Swift app sends none. */
-  platform?: 'react-native'
   screen: string
   screenshot: string | null
   touch?: { x: number; y: number }
@@ -55,9 +50,6 @@ export type FixReport = {
   viewDescription: string | null
   /** `path:line` of the element's declaration, relative to the project. */
   source: string | null
-  /** React Native only: `path:line` of each use of the components around the element. */
-  usedAt: string[]
-  platform: Platform
   screen: string
   screenshot: string | null
   status: FixStatus

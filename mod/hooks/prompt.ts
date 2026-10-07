@@ -1,4 +1,4 @@
-import type { Accessibility, AxElement, FixReport, Incoming, Platform } from '../types'
+import type { Accessibility, AxElement, FixReport, Incoming } from '../types'
 
 /** What a `[fix …]` prompt calls for; sent with the system prompt while the mod is loaded. */
 export const INSTRUCTIONS = `# Fix requests from the running app
@@ -49,16 +49,6 @@ export function isReactNativeProject(packageJson: string | null) {
   } catch {
     return false
   }
-}
-
-/** The system prompt section for the project in the working directory, from its package.json. */
-export function instructionsFor(packageJson: string | null) {
-  return isReactNativeProject(packageJson) ? RN_INSTRUCTIONS : INSTRUCTIONS
-}
-
-/** How the pane names a report that ended without its fix on screen. */
-export function stoppedLabel(platform: Platform) {
-  return platform === 'react-native' ? 'not applied' : 'not rebuilt'
 }
 
 /** One accessibility element in words: its type, then its label, value and identifier. */

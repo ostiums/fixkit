@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
+import { INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
+
 // The test runner has timers; the hooks module's own environment, typed here, does not.
 declare function setTimeout(callback: () => void, ms: number): unknown
 
@@ -27,7 +29,7 @@ function receiverLines() {
 }
 
 /** The world beneath the mod: a receiver the test drives, and the statuses the mod publishes. */
-function world(on: On) {
+function world(on: On, packageJson: string | null = null) {
   const receiver = receiverLines()
   const statuses: Record<string, string>[] = []
   let submitted: () => void = () => {}
@@ -47,7 +49,8 @@ function world(on: On) {
     return { text: e.text }
   })
   on('fs.read', async () => {
-    throw new Error('ENOENT')
+    if (packageJson === null) throw new Error('ENOENT')
+    return { value: packageJson }
   })
   on('fs.write', async (_$, e) => {
     if (e.path.endsWith('status.json')) statuses.push(JSON.parse(e.text))
@@ -96,4 +99,26 @@ test('without a launch the fix is not on screen', async ($, on) => {
   await $.turn.complete({ ...turnEnd, reason: 'answer' })
 
   expect(statuses.at(-1)?.r1).toBe('stopped')
+})
+
+/** The facts of one prompt being composed. */
+const composing = { model: 'm', promptModel: 'm', surfaces: [], tools: [], outputStyle: null, traits: [] } as const
+
+test('a React Native project gets the React Native instructions', async ($, on) => {
+  const app = JSON.stringify({ dependencies: { 'react-native': '0.86.3' } })
+  world(on, app)
+  on('prompt.compose', async () => ({ sections: [] }))
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  const { sections } = await $.prompt.compose(composing)
+
+  expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(RN_INSTRUCTIONS)
+})
+
+test('without a package.json the instructions are the iOS ones', async ($, on) => {
+  world(on)
+  on('prompt.compose', async () => ({ sections: [] }))
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  const { sections } = await $.prompt.compose(composing)
+
+  expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(INSTRUCTIONS)
 })
