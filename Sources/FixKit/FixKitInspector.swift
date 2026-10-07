@@ -16,7 +16,10 @@ enum FixInspector {
     }
 
     static func inspect(at point: CGPoint, in window: UIWindow) -> Finding {
-        guard let deepest = deepestView(at: point, in: window),
+        // hitTest looks past containers that let touches through, like a tab bar's over the content;
+        // below the view it finds, labels and images that take no touches are searched for by hand.
+        guard let hit = window.hitTest(point, with: nil),
+              let deepest = deepestView(at: point, in: hit),
               let controller = responders(from: deepest).first(where: { $0 is UIViewController && isAppDefined($0) })
         else { return Finding() }
 
@@ -31,11 +34,13 @@ enum FixInspector {
             // Above a view controller's root view the views belong to someone else's screen.
             if view.next is UIViewController { break }
         }
-        return Finding(screen: screen, view: describe(deepest))
+        // A press on a control's own parts, a button's label or a switch's knob, describes the control.
+        let control = sequence(first: deepest, next: \.superview).first { $0 is UIControl }
+        return Finding(screen: screen, view: describe(control ?? deepest))
     }
 
-    /// The deepest visible view under the point. Not `hitTest`: labels and image views do not
-    /// take touches, so it would pass over exactly the views people point at.
+    /// The deepest visible view under the point, whether or not it takes touches: `hitTest` alone
+    /// would pass over labels and image views, exactly the views people point at.
     private static func deepestView(at point: CGPoint, in view: UIView) -> UIView? {
         guard !view.isHidden, view.alpha > 0.01, view.bounds.contains(view.convert(point, from: view.window))
         else { return nil }
@@ -90,7 +95,7 @@ enum FixInspector {
     private static func describe(_ view: UIView) -> String {
         let text: String? = switch view {
         case let label as UILabel: label.text
-        case let button as UIButton: button.currentTitle
+        case let button as UIButton: button.configuration?.title ?? button.currentTitle
         case let field as UITextField: field.text.flatMap { $0.isEmpty ? nil : $0 } ?? field.placeholder
         default: view.accessibilityLabel
         }
