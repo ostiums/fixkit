@@ -44,6 +44,8 @@ In Xcode: File › Add Package Dependencies › `https://github.com/ostiums/fixk
 .package(url: "https://github.com/ostiums/fixkit", from: "0.1.0")
 ```
 
+A React Native app installs an npm package instead: see [React Native](#react-native).
+
 ### 3. Add one line to the app
 
 **SwiftUI**, on the root view:
@@ -158,6 +160,21 @@ export default function App() {
 }
 ```
 
+### Build and run
+
+FixKit runs in any development build that Metro serves. There is nothing to add to Xcode, the Podfile or `app.json`, and no `pod install`: the package has no native code.
+
+| Project | Run it in the simulator with |
+| --- | --- |
+| Expo, no native code of its own | `npx expo start --ios`, which opens it in Expo Go |
+| Expo with a development build | `npx expo run:ios` once, then `npx expo start --ios` |
+| React Native CLI | `npx react-native run-ios`, which starts Metro too |
+
+- **Start `claude` in the folder with the app's `package.json`.** That is how the mod knows the project is React Native, and where `.fixkit/` goes. Above it, Claude gets the iOS instructions and rebuilds where saving would do.
+- **Keep Metro running.** Fast Refresh puts Claude's edits on screen, and the receiver reads source lines from the map Metro serves.
+- **A native change still needs a native build.** For a change to native code or native configuration (the Podfile, `Info.plist`, an Expo config plugin), Claude runs the project's own command from the table. XcodeBuildMCP isn't needed.
+- **Release builds leave it out:** `npx expo run:ios --configuration Release`, an EAS build or an archive from Xcode.
+
 Nothing has to be marked. React records where each element's JSX is written, so a report names the components around the pressed element, the line of its JSX and where its component is used:
 
 ```
@@ -169,8 +186,8 @@ Nothing has to be marked. React records where each element's JSX is written, so 
 - **The pressed button stays still.** While FixKit holds a press, `Pressable`, the `Touchable` components, `Button` and pressable `Text` neither long-press nor press on release. For that FixKit wraps React Native's private `Pressability` in development, and Metro warns once about the deep import. Gesture Handler's native buttons are not held.
 - **Lines come from the code the app launched with.** Once Fast Refresh has changed a file, its lines in later reports can be a few off until the next reload; Claude is told to look around them.
 - **The receiver does the native parts.** It takes the screenshot with `simctl` and reads the source lines from the map Metro served with the bundle. With several simulators booted on the same iOS version it cannot tell which one runs the app, and reports come without a screenshot.
-- **Not covered yet:** presses inside a native `Modal` or a natively presented screen, and Android, where `<FixKitHost>` renders its children and nothing else.
-- **Release bundles** contain none of it: Metro drops the host with `__DEV__`.
+- **Not covered yet:** presses inside a native `Modal` or a natively presented screen, a second `<FixKitHost>` inside the first, and Android, where `<FixKitHost>` renders its children and nothing else.
+- **Release bundles** contain none of it: Metro drops the host along with `__DEV__`.
 
 `react-native/example` is a small Expo app to try it on:
 
