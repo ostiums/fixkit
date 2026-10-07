@@ -1,0 +1,16 @@
+{
+  "name": "fixkit",
+  "version": "0.1.0",
+  "description": "Long press any element of your iOS app in the simulator, say what is wrong, and the report lands in this Codex session as a queued message; the app's banner follows it until the fix is live.",
+  "author": {
+    "name": "ostiums"
+  },
+  "homepage": "https://github.com/ostiums/fixkit",
+  "repository": "https://github.com/ostiums/fixkit",
+  "license": "MIT",
+  "keywords": ["ios", "swiftui", "react-native", "simulator", "xcode"],
+  "hooks": "./codex/hooks.json",
+  "interface": {
+    "displayName": "FixKit"
+  }
+}

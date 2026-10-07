@@ -1,0 +1,83 @@
+{
+  "description": "FixKit: fix requests from the app in the simulator. Only the session's start and end wait on a hook; the rest forward their input to the receiver in the background.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"$PLUGIN_ROOT/codex/session-start.mjs\"", "timeout": 10 }]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "build_run_sim$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "build_run_sim$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -d .fixkit ] && curl -s -m 2 --data-binary @- \"http://127.0.0.1:${FIXKIT_PORT:-4747}/codex/hook\" >/dev/null; exit 0",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

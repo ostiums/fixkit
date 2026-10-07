@@ -223,11 +223,12 @@ const server = createServer(async (req, res) => {
   reply(res, 404, { error: 'not found' })
 })
 
-/** Gives the port up and exits, saying why. */
+/** Gives the port up and exits, saying why, once the request that asked has its answer. */
 function leave(message) {
   emit({ type: 'error', message })
   server.close(() => process.exit(0))
-  server.closeAllConnections()
+  server.closeIdleConnections()
+  setTimeout(() => server.closeAllConnections(), 1000).unref()
 }
 
 // The port is taken by an earlier receiver: one left behind by a closed session, or the
