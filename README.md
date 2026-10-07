@@ -8,7 +8,7 @@
 
 [Watch the demo in full quality (MP4, 47 s)](docs/demo.mp4)
 
-**[Quick start](#quick-start) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
+**[Quick start](#quick-start) · [Codex](#codex) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
 
 1. **Long press** an element and type what's wrong.
 2. **The report lands** in the Claude Code session already running in your project: the element, a screenshot, your words.
@@ -81,6 +81,24 @@ window.fixKitHost()
 4. Long press an element, type what's wrong, press Return.
 
 The Fix queue pane opens in terminals 144 columns or wider; `/fix-queue` opens it at any width. Reports sent while Claude is busy wait in the queue.
+
+## Codex
+
+The same repository is a Codex plugin. Reports land in the Codex session open in the project as queued messages, and the app's banners follow them as they do with Claude Code.
+
+```bash
+codex plugin marketplace add ostiums/fixkit
+codex plugin add fixkit@fixkit
+```
+
+1. Start `codex` in the project's root. On the first start Codex asks to review the plugin's hooks: trust them there, or later in `/hooks`. Untrusted hooks do not run.
+2. Add `.fixkit/` to `.gitignore`, run a debug build in the simulator, long press, type, press Return.
+
+- **Needs Codex's shared app-server**, its default. Reports reach the session through `codex queue`, which cannot reach a session that runs a server of its own, as `codex --no-daemon` does.
+- **Only in app projects.** In a folder without an Xcode project, a `Package.swift` or a React Native `package.json`, up to the git root, the plugin starts nothing and adds nothing to the session.
+- **Nothing waits on FixKit.** Only the session's start and end run a hook Codex waits for. The rest run in the background, and tool hooks fire for `build_run_sim` alone.
+- **No pane.** Codex has no plugin UI, so the app's banners show the progress. The receiver logs to `$TMPDIR/fixkit-codex.log`.
+- **Closed sessions keep their reports.** A report sent after the session closed waits in its queue until the session is resumed.
 
 ## Pointing at the right code
 
@@ -211,6 +229,7 @@ app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──A
 - **The composer and banners** live in FixKit's own window above the app. They cover sheets and stay out of screenshots. When the keyboard would hide the element, the app slides up.
 - **The report** goes over the simulator's loopback, with no configuration. The receiver names the deepest element under the touch and saves the whole tree as `.fixkit/reports/<id>.ax.json`. A UIKit app's own description of the view comes first, since accessibility goes by position.
 - **The mod** submits the prompt, explains the `[fix …]` line in the system prompt and writes each status to `.fixkit/status.json`, which the app polls.
+- **In Codex** the receiver runs with `--codex <session>`: it queues the prompt with `codex queue`, the hooks post the turn's progress to it, and it keeps the statuses in memory. The prompt and the status rules are the same modules in `mod/core/`.
 - **"Live"** means the app launched again while Claude worked on the report: through XcodeBuildMCP, `xcodebuild` and `simctl`, or Run in Xcode.
 - **One session at a time.** A session started later takes port 4747 over.
 - **Release builds** compile FixKit out: `.fixKitHost()` returns the view unchanged and `window.fixKitHost()` does nothing. The package defines `DEBUG` for itself, whatever flags the app sets.
