@@ -1,7 +1,17 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Accessibility } from '../types'
-import { describeAccessibility, isBuildAndRun, pressedLabel, promptFor } from '../hooks/prompt'
+import {
+  INSTRUCTIONS,
+  RN_INSTRUCTIONS,
+  describeAccessibility,
+  instructionsFor,
+  isBuildAndRun,
+  isReactNativeProject,
+  pressedLabel,
+  promptFor,
+  stoppedLabel,
+} from '../hooks/prompt'
 
 const amount: Accessibility = {
   element: {
@@ -149,4 +159,44 @@ test("XcodeBuildMCP's build-and-run shows as rebuilding, whatever server name it
   expect(isBuildAndRun('mcp__plugin_x_XcodeBuildMCP__build_run_sim')).toBe(true)
   expect(isBuildAndRun('mcp__XcodeBuildMCP__build_sim')).toBe(false)
   expect(isBuildAndRun('Bash')).toBe(false)
+})
+
+test('a React Native element leads with its components, its JSX line and where it is used', () => {
+  const prompt = promptFor(
+    {
+      id: 'r7',
+      comment: 'The name is cut off',
+      platform: 'react-native',
+      screen: '',
+      screenshot: '.fixkit/reports/r7.png',
+      element: { name: 'WalletCard › Text', file: '/p/src/WalletCard.tsx', line: 18, usedAt: [{ file: '/p/App.tsx', line: 31 }] },
+      accessibility: { element: { ...amount.element, label: 'Alex Morgan' }, within: null, nearby: [] },
+    },
+    'src/WalletCard.tsx:18',
+    ['App.tsx:31'],
+  )
+
+  expect(prompt).toBe(
+    'The name is cut off\n\n' +
+      '[fix r7] WalletCard › Text · src/WalletCard.tsx:18 · used at App.tsx:31 · StaticText "Alex Morgan" · .fixkit/reports/r7.png',
+  )
+})
+
+test('a React Native project gets its own instructions; any other keeps the iOS ones', () => {
+  const app = JSON.stringify({ dependencies: { expo: '~57.0.27', react: '19.2.3', 'react-native': '0.86.3' } })
+  expect(isReactNativeProject(app)).toBe(true)
+  expect(isReactNativeProject(JSON.stringify({ devDependencies: { 'react-native': '0.86.3' } }))).toBe(true)
+  expect(isReactNativeProject(JSON.stringify({ dependencies: { react: '19.2.3' } }))).toBe(false)
+  expect(isReactNativeProject('not json')).toBe(false)
+  expect(isReactNativeProject(null)).toBe(false)
+
+  expect(instructionsFor(app)).toBe(RN_INSTRUCTIONS)
+  expect(instructionsFor(null)).toBe(INSTRUCTIONS)
+  expect(RN_INSTRUCTIONS).toContain('Fast Refresh')
+  expect(INSTRUCTIONS).not.toContain('React Native')
+})
+
+test('a stopped report says why in its own platform’s words', () => {
+  expect(stoppedLabel('ios')).toBe('not rebuilt')
+  expect(stoppedLabel('react-native')).toBe('not applied')
 })
