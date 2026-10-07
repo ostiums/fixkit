@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Animated, Keyboard, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 
 import type { Banner } from './banners'
-import { dimAround, liftFor, spotlight } from './layout'
+import { around, dimAround, liftFor, spotlight } from './layout'
 import type { Target } from './report'
 import { cancel, send, setDraft, setLift, type SessionState } from './session'
 
@@ -16,7 +16,7 @@ export function Overlay({ state }: { state: SessionState }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {state.outline && <Outline target={state.outline} />}
-      {state.target && <Composer target={state.target} draft={state.draft} lift={state.lift} />}
+      {state.target && <Composer target={state.target} canSend={state.canSend} lift={state.lift} />}
       {state.banner && <BannerView banner={state.banner} />}
     </View>
   )
@@ -24,15 +24,14 @@ export function Overlay({ state }: { state: SessionState }) {
 
 /** The pressed element outlined in red, or a red ring where the finger was. */
 function Outline({ target }: { target: Target }) {
-  const frame = target.element?.frame
-  const shape = frame
-    ? { left: frame.x - 4, top: frame.y - 4, width: frame.width + 8, height: frame.height + 8, borderRadius: 8 }
-    : { left: target.touch.x - 22, top: target.touch.y - 22, width: 44, height: 44, borderRadius: 22 }
+  const frame = target.element?.frame ?? null
+  const { x, y, width, height } = around(frame, target.touch, 4, 22)
+  const shape = { left: x, top: y, width, height, borderRadius: frame ? 8 : 22 }
   return <View pointerEvents="none" testID="fixkit.outline" style={[styles.outline, shape]} />
 }
 
 /** The dimmed screen with the pressed element lit, and the comment field above the keyboard. */
-function Composer({ target, draft, lift }: { target: Target; draft: string; lift: number }) {
+function Composer({ target, canSend, lift }: { target: Target; canSend: boolean; lift: number }) {
   const { width, height } = useWindowDimensions()
   const [keyboard, setKeyboard] = useState(0)
   const [labelWidth, setLabelWidth] = useState(0)
@@ -58,7 +57,6 @@ function Composer({ target, draft, lift }: { target: Target; draft: string; lift
   const frame = target.element?.frame ?? null
   const elementBottom = frame ? frame.y + frame.height : target.touch.y
   const lit = spotlight(frame, target.touch, lift)
-  const canSend = draft.trim().length > 0
 
   return (
     // A tap anywhere but the composer cancels, the lit element included: the app under it must not act.

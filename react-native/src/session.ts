@@ -7,8 +7,8 @@ import { reportBody, type Target } from './report'
 export type SessionState = {
   /** The press being reported while the composer is open. */
   target: Target | null
-  /** The comment being typed. */
-  draft: string
+  /** The comment typed so far has more than spaces. */
+  canSend: boolean
   banner: Banner | null
   /** The press outlined while the receiver takes its screenshot. */
   outline: Target | null
@@ -18,7 +18,9 @@ export type SessionState = {
   lift: number
 }
 
-let state: SessionState = { target: null, draft: '', banner: null, outline: null, sending: false, lift: 0 }
+let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0 }
+// The comment being typed, out of the state: a keystroke re-renders nothing unless `canSend` changes.
+let draft = ''
 const listeners = new Set<() => void>()
 
 function set(change: Partial<SessionState>) {
@@ -39,14 +41,25 @@ export const store = {
 // Each follow holds a ticket; a newer follow or a new report retires the older one.
 let ticket = 0
 let hiding: ReturnType<typeof setTimeout> | null = null
+// How long the host's spring takes to slide the app back down.
+const LIFT_SETTLES = 400
+
+/** A report Claude is done with: its fix is on screen, or the turn ended without it. */
+const isOver = (status: string) => status === 'live' || status === 'stopped'
 
 export const isBusy = () => state.target !== null || state.sending
 
 export function begin(target: Target) {
-  if (!isBusy()) set({ target, draft: '' })
+  if (isBusy()) return
+  draft = ''
+  set({ target, canSend: false })
 }
 
-export const setDraft = (draft: string) => set({ draft })
+export function setDraft(text: string) {
+  draft = text
+  const canSend = text.trim().length > 0
+  if (canSend !== state.canSend) set({ canSend })
+}
 
 export function setLift(lift: number) {
   if (lift !== state.lift) set({ lift })
@@ -55,39 +68,42 @@ export function setLift(lift: number) {
 export const cancel = () => set({ target: null, lift: 0 })
 
 export async function send() {
-  const { target } = state
-  const comment = state.draft.trim()
+  const { target, lift } = state
+  const comment = draft.trim()
   if (!target || !comment || state.sending) return
 
   ticket++
   hide()
   set({ target: null, lift: 0, sending: true })
   // The receiver takes the screenshot and reads the screen as the report arrives, so the report
-  // leaves once the composer and the keyboard are gone and the outline is on screen.
-  await keyboardGone()
+  // leaves once the composer and the keyboard are gone, the app has slid back down and the outline
+  // is on screen.
+  await Promise.all([keyboardGone(), lift > 0 ? sleep(LIFT_SETTLES) : null])
   set({ outline: target })
   await frames(2)
+  let id: string | null = null
   try {
-    const id = await sendReport(reportBody(target, comment, String(Platform.Version)))
-    set({ sending: false, outline: null })
-    show(SENT)
-    void follow(id)
-  } catch {
-    set({ sending: false, outline: null })
+    id = await sendReport(reportBody(target, comment, String(Platform.Version)))
+  } catch {}
+  set({ sending: false, outline: null })
+  if (id === null) {
     show(OFFLINE, 4000)
+    return
   }
+  show(SENT)
+  void follow(id)
 }
 
 /**
  * At launch and after every Fast Refresh: tells the receiver the app runs its latest code, which is
  * how the mod learns a fix is on screen, then follows the report Claude is working on. A report
- * already over shows nothing, so a later reload never repeats its banner. `bundle` is given at
- * launch only: a Fast Refresh does not reload the bundle.
+ * already over shows nothing, so a later reload never repeats its banner. `stack`, a stack from the
+ * bundle that runs, is given at launch only: a Fast Refresh does not reload the bundle.
  */
-export async function announceLaunch(bundle: string | null = null) {
+export async function announceLaunch(stack: string | null = null) {
   try {
-    const { id, status } = await launched(bundle)
-    if (id && status && status !== 'live' && status !== 'stopped') void follow(id)
+    const { id, status } = await launched(stack)
+    if (id && status && !isOver(status)) void follow(id)
   } catch {}
 }
 
@@ -100,7 +116,7 @@ async function follow(id: string) {
       status = (await statusOf(id)).status
     } catch {}
     if (mine !== ticket || status === null) continue
-    if (status === 'live' || status === 'stopped') {
+    if (isOver(status)) {
       ticket++
       show(bannerFor(status), 4000)
       return

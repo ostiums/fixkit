@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
-import { bundleMap, sourcesFor, withSources } from './metro.mjs'
+import { bundleMap, parseStack, sourcesFor, withSources } from './metro.mjs'
 import { bootedSimulator, captureScreen } from './simulator.mjs'
 
 const PORT = Number(process.env.FIXKIT_PORT ?? 4747)
@@ -27,35 +27,33 @@ const ACTIVE = new Set(['queued', 'fixing', 'rebuilding'])
 // The AXe that answered last; the search for one runs again only when it fails.
 let axe = null
 
-// The maps of the bundles React Native apps launched with, by bundle URL. A Fast Refresh changes the
-// bundle Metro serves but not the code the app runs, so its stacks are read with the map of launch.
+// The maps of the bundles React Native apps launched with, by bundle URL, each a promise of the map
+// or of null. A Fast Refresh changes the bundle Metro serves but not the code the app runs, so its
+// stacks are read with the map of launch.
 const maps = new Map()
 
-/** Keeps the map of the bundle a React Native app says it launched with. */
-function keepMap(body) {
-  let bundle
-  try {
-    bundle = JSON.parse(body).bundle
-  } catch {
-    return
-  }
-  if (typeof bundle !== 'string') return
-  bundleMap(bundle)
-    .then(map => maps.set(bundle, map))
-    .catch(error => process.stderr.write(`source map: ${error.message}\n`))
+/** Keeps the map of the bundle a React Native app launched with, the one its stack's first frame runs from. */
+function keepMap(stack) {
+  const bundle = typeof stack === 'string' ? parseStack(stack)[0]?.file : undefined
+  if (!bundle) return
+  const map = bundleMap(bundle).catch(error => {
+    process.stderr.write(`source map: ${error.message}\n`)
+    return null
+  })
+  maps.set(bundle, map)
 }
 
-// Said once: with two simulators booted on one iOS version, a React Native report cannot tell which is its own.
+// Said once: with two simulators booted on one iOS version, a report that names none cannot tell which is its own.
 let toldSimulator = false
 
-/** The simulator a report came from: its own word, else for React Native the one booted on its iOS version. */
+/** The simulator a report came from: its own word, else the one booted on its iOS version. */
 async function simulatorOf(report) {
   if (report.simulator) return report.simulator
-  if (report.platform !== 'react-native') return null
   const { udid, booted } = await bootedSimulator(report.os).catch(() => ({ udid: null, booted: 0 }))
   if (udid === null && booted > 1 && !toldSimulator) {
     toldSimulator = true
-    emit({ type: 'notice', message: `Boot one simulator per iOS version: ${booted} run iOS ${report.os}, so reports come without a screenshot` })
+    const on = report.os ? ` on iOS ${report.os}` : ''
+    emit({ type: 'notice', message: `Boot one simulator per iOS version: ${booted} run${on}, so reports come without a screenshot or what accessibility says` })
   }
   return udid
 }
@@ -101,8 +99,48 @@ async function lookUp(id, report) {
   return elementAt(tree, report.touch)
 }
 
-// Reports reach the mod in the order they arrived, each once its own lookup is done. The
-// lookups start at once, so a slow one never makes the next one read a later screen.
+/** Saves the app's screenshot, or takes the simulator's; the path, or null without one. */
+async function saveScreenshot(png, simulator, path) {
+  try {
+    if (png) writeFileSync(join(process.cwd(), path), Buffer.from(png, 'base64'))
+    else if (simulator) await captureScreen(simulator, join(process.cwd(), path))
+    else return null
+    return path
+  } catch (error) {
+    process.stderr.write(`screenshot: ${error.message}\n`)
+    return null
+  }
+}
+
+/**
+ * A report as the mod takes it: its screenshot, what accessibility says was pressed and the
+ * element's source lines. The app waits for the answer until all of it is done and takes no new
+ * long press meanwhile, so the screen read is the one pressed.
+ */
+async function prepare({ screenshotPNG, stacks, ...sent }, id) {
+  const sources = Array.isArray(stacks) && stacks.length > 0 ? sourcesFor(stacks, { maps }).catch(() => null) : null
+  const simulator = await simulatorOf(sent)
+  const report = simulator ? { ...sent, simulator } : sent
+  const [screenshot, accessibility, located] = await Promise.all([
+    saveScreenshot(screenshotPNG, simulator, join('.fixkit', 'reports', `${id}.png`)),
+    lookUp(id, report).catch(() => null),
+    sources,
+  ])
+  return { ...report, element: withSources(report.element, located), id, screenshot, accessibility }
+}
+
+/** A request's body as text. */
+const readBody = req =>
+  new Promise((resolve, reject) => {
+    const chunks = []
+    req.on('data', chunk => chunks.push(chunk))
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
+
+// Reports reach the mod in the order they arrived, each once it is prepared. Each takes its place
+// in line as it arrives and its lookups start at once, so a slow one never makes the next one read
+// a later screen.
 let delivered = Promise.resolve()
 
 // The session that started this receiver is gone when its pipe breaks or the
@@ -140,9 +178,8 @@ const server = createServer((req, res) => {
   // The answer is the report Claude is working on (reports are worked through in order), else
   // the newest one, for the app to follow or announce.
   if (req.method === 'POST' && url.pathname === '/launched') {
-    const chunks = []
-    req.on('data', chunk => chunks.push(chunk))
-    req.on('end', () => keepMap(Buffer.concat(chunks).toString('utf8')))
+    // A React Native app sends a stack from the bundle it launched with; a Swift app sends nothing.
+    void readBody(req).then(body => keepMap(JSON.parse(body).stack)).catch(() => {})
     emit({ type: 'launched' })
     const all = statuses()
     const id = Object.keys(all).find(key => ACTIVE.has(all[key])) ?? (count > 0 ? `r${count}` : null)
@@ -150,43 +187,12 @@ const server = createServer((req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/report') {
-    const chunks = []
-    req.on('data', chunk => chunks.push(chunk))
-    req.on('end', async () => {
-      try {
-        const { screenshotPNG, stacks, ...sent } = JSON.parse(Buffer.concat(chunks).toString('utf8'))
-        const id = `r${++count}`
-        const simulator = await simulatorOf(sent)
-        const report = simulator ? { ...sent, simulator } : sent
-        let screenshot = null
-        if (screenshotPNG) {
-          screenshot = join('.fixkit', 'reports', `${id}.png`)
-          writeFileSync(join(process.cwd(), screenshot), Buffer.from(screenshotPNG, 'base64'))
-        } else if (simulator) {
-          // The app has drawn its outline and waits for the answer, so the screen is what was pressed.
-          const path = join('.fixkit', 'reports', `${id}.png`)
-          try {
-            await captureScreen(simulator, join(process.cwd(), path))
-            screenshot = path
-          } catch (error) {
-            process.stderr.write(`screenshot: ${error.message}\n`)
-          }
-        }
-        // The answer waits for the lookup and the sources: until it comes the app takes no new
-        // long press, which would change the screen being read.
-        const accessibility = lookUp(id, report).catch(() => null)
-        const sources = Array.isArray(stacks) && stacks.length > 0 ? sourcesFor(stacks, fetch, maps).catch(() => null) : null
-        const ready = Promise.all([accessibility, sources])
-        void ready.then(() => reply(res, 200, { id }))
-        delivered = delivered.then(async () => {
-          const [found, located] = await ready
-          const element = withSources(report.element, located)
-          emit({ type: 'report', report: { ...report, ...(element && { element }), id, screenshot, accessibility: found } })
-        })
-      } catch (error) {
-        reply(res, 400, { error: String(error) })
-      }
-    })
+    const ready = readBody(req).then(body => prepare(JSON.parse(body), `r${++count}`))
+    ready.then(
+      report => reply(res, 200, { id: report.id }),
+      error => reply(res, 400, { error: String(error) }),
+    )
+    delivered = delivered.then(() => ready.then(report => emit({ type: 'report', report }), () => {}))
     return
   }
 
@@ -220,5 +226,5 @@ server.listen(PORT, '127.0.0.1', () => {
   // Only the receiver that holds the port may clear the previous run's files.
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(reportsDir, { recursive: true })
-  emit({ type: 'ready', port: PORT })
+  emit({ type: 'ready', port: server.address().port })
 })

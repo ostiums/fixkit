@@ -1,7 +1,6 @@
 import { useEffect, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Animated, StyleSheet, View, type GestureResponderEvent } from 'react-native'
 
-import { bundleFrom } from './bundle'
 import { hold, installHold, release } from './hold'
 import { inspectAt } from './inspect'
 import { Overlay } from './overlay'
@@ -49,16 +48,18 @@ export function FixKitHost({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     install()
-    void announceLaunch(bundleFrom(new Error().stack))
+    // A stack from this code names the bundle it runs from.
+    void announceLaunch(new Error().stack ?? null)
   }, [])
 
   useEffect(() => {
     Animated.spring(lift, { toValue: -state.lift, useNativeDriver: true, bounciness: 0, speed: 20 }).start()
   }, [lift, state.lift])
 
-  const ended = () => {
+  const ended = (event: GestureResponderEvent) => {
     tracker.current?.stop()
-    release()
+    // The hold lasts until the last finger lifts: a second one lifting first must not free the press.
+    if (event.nativeEvent.touches.length === 0) release()
   }
 
   return (
@@ -68,7 +69,10 @@ export function FixKitHost({ children }: { children: ReactNode }) {
       onTouchStart={event => tracker.current?.start(point(event), event.nativeEvent.touches.length)}
       onTouchMove={event => tracker.current?.move(point(event))}
       onTouchEnd={ended}
-      onTouchCancel={ended}
+      onTouchCancel={() => {
+        tracker.current?.stop()
+        release()
+      }}
     >
       <Animated.View style={[styles.fill, { transform: [{ translateY: lift }] }]}>{children}</Animated.View>
       <Overlay state={state} />
