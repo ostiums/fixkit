@@ -1,13 +1,13 @@
-# react-native-fixkit
+# fixkit for React Native
 
 Long press any element of your React Native app in the iOS simulator, type what's wrong, press Return. The report lands in the Claude Code session running in your project, with the line of the element's JSX, a screenshot and your words. Claude fixes the code and Fast Refresh puts it on screen.
 
 ```bash
-npm install --save-dev react-native-fixkit
+npm install --save-dev fixkit
 ```
 
 ```tsx
-import { FixKitHost } from 'react-native-fixkit'
+import { FixKitHost } from 'fixkit'
 
 export default function App() {
   return (
