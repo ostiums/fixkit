@@ -84,8 +84,10 @@ function Composer({ target, draft, lift }: { target: Target; draft: string; lift
           {target.element.name}
         </Text>
       )}
+      {/* Takes the touches that miss its field and button, which would otherwise cancel. */}
       <View
         style={[styles.composer, { bottom: keyboard + 10 }]}
+        onStartShouldSetResponder={() => true}
         onLayout={event => setLift(liftFor(elementBottom, event.nativeEvent.layout.y))}
       >
         <Text style={styles.sparkle}>✦</Text>
