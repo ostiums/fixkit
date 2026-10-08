@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:fixkit/src/inspect.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The line of this file that holds `text`, to compare with where a widget is constructed.
@@ -19,6 +19,22 @@ class Screen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Center(child: NameCard()); // the card
+}
+
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text('Hello'))); // the greeting
+}
+
+class DetailPage extends StatelessWidget {
+  const DetailPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    body: Align(alignment: Alignment.centerLeft, child: Padding(padding: EdgeInsets.only(left: 16), child: Text('Edge'))), // the edge
+  );
 }
 
 /// A widget the app did not write: its child is constructed here, in a "package" stand-in, which
@@ -80,5 +96,29 @@ void main() {
 
     expect(found.source!.line, lineOf('// the field'));
     expect(found.name, 'EditableText');
+  });
+
+  testWidgets("a Scaffold's own wrappers are not the app's widget: the screen is", (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: HomePage())); // the app
+    final host = tester.element(find.byType(MaterialApp));
+
+    final found = inspectAt(tester.getCenter(find.text('Hello')), host).element!;
+
+    expect(found.name, 'HomePage › Text');
+    expect(found.source!.line, lineOf('// the greeting'));
+    expect(found.usedAt.first.line, lineOf('// the app'));
+  });
+
+  testWidgets('a press by the left edge of an iOS page is the widget there, not the back swipe strip', (tester) async {
+    await tester.pumpWidget(MaterialApp(theme: ThemeData(platform: TargetPlatform.iOS), home: const HomePage()));
+    tester.state<NavigatorState>(find.byType(Navigator)).push(MaterialPageRoute<void>(builder: (_) => const DetailPage()));
+    await tester.pumpAndSettle();
+    final host = tester.element(find.byType(MaterialApp));
+    final edge = tester.getRect(find.text('Edge'));
+
+    final found = inspectAt(Offset(edge.left + 2, edge.center.dy), host).element!;
+
+    expect(found.name, 'DetailPage › Text');
+    expect(found.source!.line, lineOf('// the edge'));
   });
 }

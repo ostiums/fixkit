@@ -66,15 +66,20 @@ const opened = socket =>
 
 /** Hot reloads, or with `restart` hot restarts, the app whose VM service is `vmService`. */
 export async function reload(vmService, { restart = false } = {}, { fetchImpl = fetch, WebSocketImpl = WebSocket, wait = 1000, deadline = 60_000 } = {}) {
-  let url
-  try {
-    url = await ddsSocketUrl(vmService, fetchImpl)
-  } catch {
-    throw new Error(NOT_RUNNING)
-  }
-  const socket = new WebSocketImpl(url)
+  let socket = null
   let timer
+  let finished = false
+  // All of it under the deadline: a suspended app accepts the connection and never answers.
   const work = (async () => {
+    let url
+    try {
+      url = await ddsSocketUrl(vmService, fetchImpl)
+    } catch {
+      throw new Error(NOT_RUNNING)
+    }
+    // The deadline passed while DDS was looked up: nothing is left to open a socket for.
+    if (finished) return
+    socket = new WebSocketImpl(url)
     await opened(socket)
     const rpc = rpcOver(socket, restart ? 'hotRestart' : 'reloadSources', wait)
     const [{ isolates = [] }] = await Promise.all([rpc.call('getVM'), rpc.call('streamListen', { streamId: 'Service' }).catch(() => {})])
@@ -90,7 +95,8 @@ export async function reload(vmService, { restart = false } = {}, { fetchImpl = 
   try {
     await Promise.race([work, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(TOO_LONG)), deadline)))])
   } finally {
+    finished = true
     clearTimeout(timer)
-    socket.close()
+    socket?.close()
   }
 }

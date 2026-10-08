@@ -1,5 +1,5 @@
 import 'package:fixkit/fixkit.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -66,4 +66,18 @@ void main() {
     expect(find.byType(EditableText), findsNothing);
     expect(longPresses, 1);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('the keyboard the composer opens does not resize the app under it', (tester) async {
+    await tester.pumpWidget(const FixKitHost(child: MaterialApp(home: Scaffold(body: Center(child: Text('Pay'))))));
+    await tester.longPress(find.text('Pay'));
+    await tester.pump();
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pump();
+
+    // What the Scaffold sees: it would shrink its body by it.
+    expect(MediaQuery.viewInsetsOf(tester.element(find.byType(Scaffold))).bottom, 0);
+    expect(find.byType(EditableText), findsOneWidget);
+  }, variant: iOS);
 }

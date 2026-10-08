@@ -74,7 +74,13 @@ class _DebugHostState extends State<DebugHost> {
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOut,
                 builder: (context, lift, child) => Transform.translate(offset: Offset(0, -lift), child: child),
-                child: widget.child,
+                // The composer's keyboard is FixKit's, not the app's: a Scaffold would shrink its
+                // body under the lit element. Always a MediaQuery, so the app's tree keeps its shape.
+                child: MediaQuery.removeViewInsets(
+                  context: context,
+                  removeBottom: _session.target != null,
+                  child: widget.child,
+                ),
               ),
             ),
             FixKitOverlay(session: _session),
