@@ -88,7 +88,7 @@ export const HOT_RELOAD_TOOL = 'mcp__fixkit__hot_reload'
  * @returns {ProjectKind}
  */
 export function projectKind({ packageJson, pubspec }) {
-  if (pubspec !== null && /^\s+sdk:\s*flutter\s*$/m.test(pubspec)) return 'flutter'
+  if (pubspec !== null && /^\s+sdk:\s*flutter\s*(?:#.*)?$/m.test(pubspec)) return 'flutter'
   return isReactNativeProject(packageJson) ? 'react-native' : 'native'
 }
 

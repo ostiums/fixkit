@@ -16,7 +16,7 @@ const behindDds = async (url, init) => {
 }
 
 /** A VM service over a fake WebSocket: `services` are registered by flutter run, `answer` answers a call to one. */
-function fakeSocket({ services = ['reloadSources', 'hotRestart'], answer = () => ({ result: { type: 'Success' } }) } = {}) {
+function fakeSocket({ services = ['reloadSources', 'hotRestart'], answer = () => ({ result: { type: 'Success' } }), closeOn = null } = {}) {
   const calls = []
   class FakeSocket {
     constructor(url) {
@@ -26,6 +26,7 @@ function fakeSocket({ services = ['reloadSources', 'hotRestart'], answer = () =>
     send(text) {
       const { id, method, params } = JSON.parse(text)
       calls.push({ url: this.url, method, params })
+      if (method === closeOn) return setTimeout(() => this.onclose?.(), 0)
       const reply = body => setTimeout(() => this.onmessage?.({ data: JSON.stringify({ jsonrpc: '2.0', id, ...body }) }), 0)
       if (method === 'getVM') return reply({ result: { isolates: [{ id: 'isolates/1', name: 'main' }] } })
       if (method === 'streamListen') {
@@ -86,4 +87,11 @@ test('an app that is gone is not running', async () => {
     throw new TypeError('fetch failed')
   }
   await assert.rejects(reload(VM, {}, { fetchImpl }), { message: NOT_RUNNING })
+})
+
+test('an app that quits during the reload is not running, at once', async () => {
+  const { FakeSocket } = fakeSocket({ closeOn: 's1.reloadSources' })
+  const started = Date.now()
+  await assert.rejects(reload(VM, {}, { fetchImpl: behindDds, WebSocketImpl: FakeSocket, deadline: 5000 }), { message: NOT_RUNNING })
+  assert.ok(Date.now() - started < 1000)
 })

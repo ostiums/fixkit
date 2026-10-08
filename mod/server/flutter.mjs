@@ -36,6 +36,11 @@ function rpcOver(socket) {
       listeners.forEach(listener => listener())
     }
   }
+  // The app quit or flutter run stopped: every call still waiting fails at once.
+  socket.onclose = () => {
+    for (const { reject } of pending.values()) reject(new Error(NOT_RUNNING))
+    pending.clear()
+  }
   return {
     call(method, params = {}) {
       const id = String(++count)
@@ -88,6 +93,7 @@ export async function reload(vmService, { restart = false } = {}, { fetchImpl = 
     const method = await rpc.service(restart ? 'hotRestart' : 'reloadSources', wait)
     if (!method || !isolate) throw new Error(NOT_FLUTTER_RUN)
     const result = await rpc.call(method, { isolateId: isolate.id }).catch(error => {
+      if (error instanceof Error && error.message === NOT_RUNNING) throw error
       throw new Error(error?.message ? `${FAILED}: ${error.message}` : FAILED)
     })
     if (result?.success === false) throw new Error(FAILED)

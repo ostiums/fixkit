@@ -32,7 +32,7 @@ export type Incoming = {
     name: string
     file?: string
     line?: number
-    /** React Native only: where the components around the element are used, nearest first. */
+    /** React Native and Flutter: where the components around the element are used, nearest first. */
     usedAt?: { file: string; line: number }[]
   }
   /** UIKit only: the pressed view's class and text, as the app sees it. */
