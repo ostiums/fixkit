@@ -27,7 +27,7 @@ For a SwiftUI or UIKit app with Claude Code. Using Codex or React Native? Swap i
 
 **Recommended:**
 
-- [AXe](https://github.com/cameroncooke/AXe) (`brew install cameroncooke/axe/axe`) names the pressed element (looked up in `FIXKIT_AXE`, `PATH`, then XcodeBuildMCP's copy). Without it, reports carry only the screenshot and the touch point.
+- [AXe](https://github.com/cameroncooke/AXe) names the pressed element. If XcodeBuildMCP runs through `npx`, FixKit uses the AXe bundled with it; otherwise `brew install cameroncooke/axe/axe`, or point `FIXKIT_AXE` at a copy. Without AXe, reports carry only the screenshot and the touch point.
 - [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP) rebuilds and relaunches in one call.
 
 ### 1. Install the plugin
