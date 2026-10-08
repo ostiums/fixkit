@@ -198,6 +198,7 @@ test('a pubspec that depends on the Flutter SDK makes a Flutter project, whateve
   const pubspec = 'name: wallet\ndependencies:\n  flutter:\n    sdk: flutter\n'
   expect(projectKind({ packageJson: null, pubspec })).toBe('flutter')
   expect(projectKind({ packageJson: JSON.stringify({ dependencies: { 'react-native': '0.86' } }), pubspec })).toBe('flutter')
+  expect(projectKind({ packageJson: null, pubspec: 'dependencies:\n  flutter:\n    sdk: flutter # the SDK\n' })).toBe('flutter')
 })
 
 test('a pure Dart pubspec is not a Flutter project; React Native and native as before', () => {
