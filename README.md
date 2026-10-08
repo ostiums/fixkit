@@ -1,14 +1,14 @@
 # FixKit
 
-**Long press anything in your iOS or React Native app in the simulator, say what's wrong, and Claude Code or Codex fixes it.**
+**Long press anything in your iOS, React Native or Flutter app in the simulator, say what's wrong, and Claude Code or Codex fixes it.**
 
-![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![SwiftUI, UIKit and React Native](https://img.shields.io/badge/SwiftUI%20%7C%20UIKit%20%7C%20React%20Native-supported-brightgreen) ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
+![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue) ![Swift 6](https://img.shields.io/badge/Swift-6-orange) ![SwiftUI, UIKit, React Native and Flutter](https://img.shields.io/badge/SwiftUI%20%7C%20UIKit%20%7C%20React%20Native%20%7C%20Flutter-supported-brightgreen) ![MIT](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ![Long presses in the simulator send reports to Claude Code in the terminal: a shifted button, a corner radius, a single-colour chart and the tab bar, each fixed while the app relaunches](docs/demo.gif)
 
 [Watch the demo in full quality (MP4, 47 s)](docs/demo.mp4)
 
-**[Quick start](#quick-start) · [Codex](#codex) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
+**[Quick start](#quick-start) · [Codex](#codex) · [SwiftUI](#swiftui) · [UIKit](#uikit) · [React Native](#react-native) · [Flutter](#flutter) · [How it works](#how-it-works) · [Try it on Tally](#try-it-on-tally)**
 
 1. **Long press** an element and type what's wrong.
 2. **The report lands** in your agent session: your words, the element, a screenshot.
@@ -16,12 +16,12 @@
 
 FixKit has two parts:
 
-- **In the app:** a debug-only library that sends reports. The **FixKit** Swift package for SwiftUI and UIKit, the **fixkit** npm package for React Native.
+- **In the app:** a debug-only library that sends reports. The **FixKit** Swift package for SwiftUI and UIKit, the **fixkit** npm package for React Native, the **fixkit** Dart package for Flutter.
 - **In the agent:** the **fixkit** plugin for Claude Code and Codex. Its local server, the receiver (`127.0.0.1:4747`), turns each report into a prompt.
 
 ## Quick start
 
-For a SwiftUI or UIKit app with Claude Code. Using Codex or React Native? Swap in the steps from [Codex](#codex) or [React Native](#react-native).
+For a SwiftUI or UIKit app with Claude Code. With Codex as the agent, swap in the steps from [Codex](#codex). For a React Native or Flutter app, see [React Native](#react-native) or [Flutter](#flutter).
 
 **You need:** Claude Code 2.1.287+ or Codex CLI 0.159+, Node.js 18.2+, Xcode and an iOS 17+ simulator. FixKit works in the simulator only.
 
@@ -91,7 +91,7 @@ codex plugin add fixkit@fixkit
 Differences from Claude Code:
 
 - **No pane.** Progress shows only in the app's banners (which say "Claude Code" with either agent). Log: `$TMPDIR/fixkit-codex.log`.
-- **Only in app projects:** a folder, or one above it up to the git root, with an Xcode project, a `Package.swift` or a React Native `package.json`. Elsewhere FixKit does nothing.
+- **Only in app projects:** a folder, or one above it up to the git root, with an Xcode project, a `Package.swift`, a React Native `package.json` or a Flutter `pubspec.yaml`. Elsewhere FixKit does nothing.
 - **Needs Codex's shared app-server** (the default). Sessions started with `codex --no-daemon` get no reports.
 - **Ending the session stops FixKit.** Reports already queued run when you resume, but without a banner.
 
@@ -202,6 +202,51 @@ cd react-native/example && npm install && npx expo start --ios
 claude --plugin-dir ../../mod    # in the same folder
 ```
 
+## Flutter
+
+The `fixkit` Dart package: Dart only, no native code, no dependency beside the Flutter SDK, so nothing changes in the Podfile or the Xcode project. Needs Flutter 3.35+.
+
+Install the [plugin](#1-install-the-plugin) ([Codex](#codex)), then add the package to `pubspec.yaml`:
+
+```yaml
+dependencies:
+  fixkit:
+    git:
+      url: https://github.com/ostiums/fixkit.git
+      path: flutter
+```
+
+```dart
+import 'package:fixkit/fixkit.dart';
+
+void main() => runApp(const FixKitHost(child: MyApp()));
+```
+
+Run it with `flutter run` in the iOS simulator, from a terminal, VS Code or Android Studio.
+
+- **Start the agent in the folder with `pubspec.yaml`.** That is how the plugin knows the app is Flutter.
+- **No rebuild.** Saving a file does not hot reload a Flutter app, so the agent asks for it: in Claude Code with the mod's `hot_reload` tool, in Codex with a POST to the receiver's `/reload`. Both go through the VM service `flutter run` serves, the one DevTools' reload button calls. A compile error comes back to the agent; a change hot reload can't apply (`initState`, globals, `main`) gets a hot restart.
+- **Release builds** leave FixKit out: `FixKitHost` returns its child unless `kDebugMode`, a constant the compiler folds. On Android and the web it returns its child too.
+
+Reports name the app's widget around the pressed one, the line of its constructor call and where that widget is used:
+
+```
+[fix r1] WalletCard › Text · lib/wallet_card.dart:20 · used at lib/main.dart:34 · StaticText "€12,480.50" · .fixkit/reports/r1.png
+```
+
+- **Widgets from Flutter and pub.dev packages are skipped** for the app's own widget around them.
+- **The pressed button stays still:** FixKit's long press wins Flutter's gesture arena at 450 ms, before a widget's own 500 ms long press, so the widget under the finger neither taps nor long-presses. An app's long press shorter than 450 ms wins over FixKit's.
+- **Lines stay current:** a hot reload rebuilds the widgets from the new code.
+- **Not covered yet:** a widget built in a helper method points into that method, not at its caller; Android.
+
+Try it on the example app:
+
+```bash
+cd flutter/example
+claude --plugin-dir ../../mod    # in this folder
+flutter run                      # in a second terminal, with the iOS simulator booted
+```
+
 ## How it works
 
 ```
@@ -216,7 +261,7 @@ app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──A
 - **The receiver** names the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`.
 - **Claude Code:** the mod submits the report as a prompt and tracks its turn.
 - **Codex:** the receiver queues the prompt with `codex queue`; hooks report the turn's progress.
-- **"Live"** means the app relaunched while the agent worked: via XcodeBuildMCP, `xcodebuild`, Xcode's Run, or Fast Refresh.
+- **"Live"** means the app relaunched while the agent worked: via XcodeBuildMCP, `xcodebuild`, Xcode's Run, Fast Refresh or a Flutter hot reload.
 - **One session at a time:** the newest session takes port 4747.
 - **Release builds** compile FixKit out, whatever flags the app sets.
 
@@ -259,7 +304,7 @@ Then serve steps from `http://127.0.0.1:4748/next`, one JSON object per request 
 
 ## Development
 
-`scripts/test.sh` runs every check: plugin validation, the mod, receiver and Codex tests, the React Native tests (Node.js 22.18+), the Swift package tests and Tally's Debug and Release builds.
+`scripts/test.sh` runs every check: plugin validation, the mod, receiver and Codex tests, the React Native tests (Node.js 22.18+), the Flutter package's tests and analysis (when `flutter` is installed), the Swift package tests and Tally's Debug and Release builds.
 
 ## License
 
