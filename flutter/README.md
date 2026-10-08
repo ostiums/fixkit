@@ -1,39 +1,23 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# fixkit for Flutter
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+Long press any widget of your Flutter app in the iOS simulator, type what's wrong, press Return. The report lands in the Claude Code or Codex session running in your project, with the line where the widget is constructed, a screenshot and your words. The agent fixes the code and hot reloads the app.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/guides/libraries/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
-
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
-
-## Features
-
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
-
-```dart
-const like = 'sample';
+```yaml
+dependencies:
+  fixkit:
+    git:
+      url: https://github.com/ostiums/fixkit.git
+      path: flutter
 ```
 
-## Additional information
+```dart
+import 'package:fixkit/fixkit.dart';
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+void main() => runApp(const FixKitHost(child: MyApp()));
+```
+
+It needs the fixkit plugin for Claude Code or Codex, Flutter 3.35+, the iOS simulator and an app started with `flutter run`. Dart only, no native code, nothing to add to the Podfile. Release builds, Android and the web get the child alone.
+
+Setup, limits and how it works: [FixKit's README](https://github.com/ostiums/fixkit#flutter).
+
+MIT.
