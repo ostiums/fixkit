@@ -206,6 +206,8 @@ claude --plugin-dir ../../mod    # in the same folder
 
 The `fixkit` Dart package: Dart only, no native code, no dependency beside the Flutter SDK, so nothing changes in the Podfile or the Xcode project. Needs Flutter 3.35+.
 
+![A long press on the wallet balance sends "Make the balance green" to Claude Code; Claude changes the colour in wallet_card.dart, calls hot_reload, and the balance turns green under the banner "Fixed by Claude Code"](docs/demo-flutter.gif)
+
 Install the [plugin](#1-install-the-plugin) ([Codex](#codex)), then add the package to `pubspec.yaml`:
 
 ```yaml
