@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { FAILED, NOT_FLUTTER_RUN, NOT_RUNNING, ddsSocketUrl, reload } from '../server/flutter.mjs'
+import { FAILED, NOT_FLUTTER_RUN, NOT_RUNNING, TOO_LONG, ddsSocketUrl, reload } from '../server/flutter.mjs'
 
 const VM = 'http://127.0.0.1:50335/07j_NgzC9Kk=/'
 const DDS_WS = 'ws://127.0.0.1:50340/MC0YBJgP2js=/ws'
@@ -94,4 +94,10 @@ test('an app that quits during the reload is not running, at once', async () => 
   const started = Date.now()
   await assert.rejects(reload(VM, {}, { fetchImpl: behindDds, WebSocketImpl: FakeSocket, deadline: 5000 }), { message: NOT_RUNNING })
   assert.ok(Date.now() - started < 1000)
+})
+
+test('an app that accepts the connection and never answers is cut off at the deadline', async () => {
+  // A suspended app: the simulator's kernel accepts, nothing replies.
+  const fetchImpl = () => new Promise(() => {})
+  await assert.rejects(reload(VM, {}, { fetchImpl, deadline: 50 }), { message: TOO_LONG })
 })
