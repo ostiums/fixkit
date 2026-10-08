@@ -4,10 +4,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { FixReport, FixStatus, Incoming, Receiver } from '../types'
 import * as fixes from '../core/fixes.mjs'
 import {
-  FLUTTER_INSTRUCTIONS,
   HOT_RELOAD_TOOL,
-  INSTRUCTIONS,
-  RN_INSTRUCTIONS,
+  instructionsFor,
   isBuildAndRun,
   pressedLabel,
   projectKind,
@@ -43,12 +41,6 @@ const LOOK: Record<FixStatus, { mark: string; label: string; color: string }> = 
 
 // In a React Native or Flutter project a fix goes live through a reload, not a rebuild.
 const RELOAD_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: 'not applied' } }
-
-const INSTRUCTIONS_FOR: Record<ProjectKind, string> = {
-  native: INSTRUCTIONS,
-  'react-native': RN_INSTRUCTIONS,
-  flutter: FLUTTER_INSTRUCTIONS,
-}
 
 const isActive = (report: FixReport) => fixes.isActive(report.status)
 
@@ -158,7 +150,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
     const readFile = (path: string) => $.fs.read(path).catch(() => null)
-    kind = projectKind({ packageJson: await readFile('package.json'), pubspec: await readFile('pubspec.yaml') })
+    const [packageJson, pubspec] = await Promise.all([readFile('package.json'), readFile('pubspec.yaml')])
+    kind = projectKind({ packageJson, pubspec })
     if (kind === 'flutter') {
       await $.tool.register({
         name: 'hot_reload',
@@ -195,7 +188,7 @@ export const register: Register = on => {
     const composed = await next(e)
 
     return {
-      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: INSTRUCTIONS_FOR[kind], scope: 'session' }],
+      sections: [...composed.sections, { id: 'fixkit:fix-requests', text: instructionsFor(kind), scope: 'session' }],
     }
   })
 

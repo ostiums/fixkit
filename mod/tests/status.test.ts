@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
 
 import { FLUTTER_INSTRUCTIONS, HOT_RELOAD_TOOL, INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
+import { FAILED } from '../server/flutter.mjs'
 
 // The test runner has timers; the hooks module's own environment, typed here, does not.
 declare function setTimeout(callback: () => void, ms: number): unknown
@@ -177,7 +178,7 @@ test('hot_reload asks the receiver, and the reload it causes makes the fix live'
 
 test("a failed reload is the tool's error, and the report goes back to fixing", async ($, on) => {
   const { receiver, statuses, submission, answerReload } = world(on, { 'pubspec.yaml': pubspec })
-  answerReload(JSON.stringify({ ok: false, error: 'The reload failed, most likely a compile error: run dart analyze on the changed files' }))
+  answerReload(JSON.stringify({ ok: false, error: FAILED }))
   await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
   receiver.send({ type: 'ready', port: 4757 })
   receiver.send(report)

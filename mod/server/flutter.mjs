@@ -19,21 +19,27 @@ export async function ddsSocketUrl(vmService, fetchImpl = fetch) {
   return (moved.searchParams.get('uri') ?? new URL('ws', moved).href).replace(/^http/, 'ws')
 }
 
-/** JSON-RPC over an open socket: calls, and the services registered on the Service stream. */
-function rpcOver(socket) {
+/**
+ * JSON-RPC over an open socket, and `registered`: the method `flutter run` registered for
+ * `service` on the Service stream, or null once `wait` ms pass without it.
+ */
+function rpcOver(socket, service, wait) {
   let count = 0
   const pending = new Map()
-  const services = new Map()
-  const listeners = new Set()
+  let found = () => {}
+  const registered = new Promise(resolve => {
+    found = resolve
+    setTimeout(() => resolve(null), wait).unref?.()
+  })
   socket.onmessage = ({ data }) => {
     const message = JSON.parse(String(data))
+    const event = message.params?.event
     if (message.id !== undefined && pending.has(message.id)) {
       const { resolve, reject } = pending.get(message.id)
       pending.delete(message.id)
       message.error ? reject(message.error) : resolve(message.result)
-    } else if (message.method === 'streamNotify' && message.params?.event?.kind === 'ServiceRegistered') {
-      services.set(message.params.event.service, message.params.event.method)
-      listeners.forEach(listener => listener())
+    } else if (message.method === 'streamNotify' && event?.kind === 'ServiceRegistered' && event.service === service) {
+      found(event.method)
     }
   }
   // The app quit or flutter run stopped: every call still waiting fails at once.
@@ -42,27 +48,11 @@ function rpcOver(socket) {
     pending.clear()
   }
   return {
+    registered,
     call(method, params = {}) {
       const id = String(++count)
       socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }))
       return new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
-    },
-    /** The method `flutter run` registered for `service`, or null once `wait` ms pass without it. */
-    service(service, wait) {
-      if (services.has(service)) return Promise.resolve(services.get(service))
-      return new Promise(resolve => {
-        const listener = () => {
-          if (!services.has(service)) return
-          done(services.get(service))
-        }
-        const done = method => {
-          listeners.delete(listener)
-          clearTimeout(timer)
-          resolve(method)
-        }
-        const timer = setTimeout(() => done(null), wait)
-        listeners.add(listener)
-      })
     },
   }
 }
@@ -86,11 +76,10 @@ export async function reload(vmService, { restart = false } = {}, { fetchImpl = 
   let timer
   const work = (async () => {
     await opened(socket)
-    const rpc = rpcOver(socket)
-    const { isolates = [] } = await rpc.call('getVM')
+    const rpc = rpcOver(socket, restart ? 'hotRestart' : 'reloadSources', wait)
+    const [{ isolates = [] }] = await Promise.all([rpc.call('getVM'), rpc.call('streamListen', { streamId: 'Service' }).catch(() => {})])
     const isolate = isolates.find(one => one.name === 'main') ?? isolates[0]
-    await rpc.call('streamListen', { streamId: 'Service' }).catch(() => {})
-    const method = await rpc.service(restart ? 'hotRestart' : 'reloadSources', wait)
+    const method = await rpc.registered
     if (!method || !isolate) throw new Error(NOT_FLUTTER_RUN)
     const result = await rpc.call(method, { isolateId: isolate.id }).catch(error => {
       if (error instanceof Error && error.message === NOT_RUNNING) throw error

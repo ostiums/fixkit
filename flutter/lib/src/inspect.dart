@@ -22,12 +22,12 @@ Source? appSource(Element element) {
 
 /// Whether the element's widget is a class the app wrote: what its build returned is the app's too.
 /// `FilledButton` builds Material's widgets; `Home` builds the app's `Scaffold`.
-bool _isAppComponent(Element element) {
+bool _isAppComponent(Element element, Source? Function(Element) sourceOf) {
   final widget = element.widget;
   if (widget is! StatelessWidget && widget is! StatefulWidget) return false;
   Element? child;
   element.visitChildren((each) => child ??= each);
-  return child != null && appSource(child!) != null;
+  return child != null && sourceOf(child!) != null;
 }
 
 /// The global frame of the element's render box, if it has a laid out one.
@@ -55,6 +55,9 @@ Target inspectAt(Offset touch, Element host) {
 }
 
 Found? _found(Element deepest, Element host) {
+  // Each element's source read once: a component's child is often the element below it in the chain.
+  final sources = <Element, Source?>{};
+  Source? sourceOf(Element element) => sources.putIfAbsent(element, () => appSource(element));
   final chain = <Element>[deepest];
   if (deepest != host) {
     deepest.visitAncestorElements((ancestor) {
@@ -63,16 +66,16 @@ Found? _found(Element deepest, Element host) {
     });
   }
   for (var index = 0; index < chain.length; index++) {
-    final source = appSource(chain[index]);
+    final source = sourceOf(chain[index]);
     if (source == null) continue;
     final element = chain[index];
-    final components = chain.skip(index + 1).where(_isAppComponent).take(2).toList();
+    final components = chain.skip(index + 1).where((each) => _isAppComponent(each, sourceOf)).take(2).toList();
     final type = element.widget.runtimeType.toString();
     return Found(
       name: components.isEmpty ? type : '${components.first.widget.runtimeType} › $type',
       source: source,
       frame: _frameOf(element),
-      usedAt: [for (final component in components) appSource(component)].whereType<Source>().where((use) => use != source).toList(),
+      usedAt: [for (final component in components) sourceOf(component)].whereType<Source>().where((use) => use != source).toList(),
     );
   }
   return null;

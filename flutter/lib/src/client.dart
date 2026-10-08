@@ -15,15 +15,13 @@ class ReportStatus {
 }
 
 class Client {
-  Client([Uri? base]) : base = base ?? Uri.parse('http://127.0.0.1:$_port');
-
-  final Uri base;
+  final _base = Uri.parse('http://127.0.0.1:$_port');
 
   Future<Object?> _call(String method, String path, {Object? body, required Duration timeout}) async {
     final http = HttpClient()..connectionTimeout = const Duration(seconds: 2);
     try {
       return await () async {
-        final request = await http.openUrl(method, base.resolve(path));
+        final request = await http.openUrl(method, _base.resolve(path));
         if (body != null) {
           request.headers.contentType = ContentType.json;
           request.write(jsonEncode(body));
