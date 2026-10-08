@@ -1,0 +1,48 @@
+name: Wishlist cleanup
+# Removes the wishlist items whose branches are merged into main from the private notes
+# repository, and deletes those branches.
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Find merged wishlist branches
+        id: merged
+        run: |
+          merged=$(git for-each-ref --format='%(refname:lstrip=3)' 'refs/remotes/origin/wishlist/*' |
+            while read -r branch; do
+              if git merge-base --is-ancestor "origin/$branch" HEAD; then echo "$branch"; fi
+            done | paste -sd ' ' -)
+          echo "branches=$merged" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        if: steps.merged.outputs.branches != ''
+        with:
+          repository: ostiums/fixkit-notes
+          ssh-key: ${{ secrets.NOTES_DEPLOY_KEY }}
+          path: notes
+      - name: Remove their items and delete them
+        if: steps.merged.outputs.branches != ''
+        env:
+          BRANCHES: ${{ steps.merged.outputs.branches }}
+        run: |
+          cd notes
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for branch in $BRANCHES; do
+            sed -i "\| → ${branch}\$|d" TODO.md
+          done
+          if ! git diff --quiet TODO.md; then
+            git commit -qm "Wishlist: $BRANCHES merged" TODO.md
+            git push -q origin HEAD:main
+          fi
+          cd ..
+          for branch in $BRANCHES; do
+            git push -q origin --delete "$branch"
+          done
