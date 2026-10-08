@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
+import { NO_APP, NOT_RUNNING } from '../server/flutter.mjs'
 import { startReceiver, until } from './receiver.mjs'
 
 /** The receiver in a folder of its own on a free port, with its stdout as JSON events. */
@@ -147,7 +148,7 @@ test('a reload before any Flutter app launched says so', async t => {
   const receiver = await startReceiver()
   t.after(receiver.stop)
 
-  assert.deepEqual(await receiver.post('/reload', {}), { ok: false, error: 'No Flutter app with FixKit has launched in this session' })
+  assert.deepEqual(await receiver.post('/reload', {}), { ok: false, error: NO_APP })
 })
 
 test('a reload goes to the VM service the Flutter app sent at launch', async t => {
@@ -156,8 +157,5 @@ test('a reload goes to the VM service the Flutter app sent at launch', async t =
   t.after(receiver.stop)
 
   await receiver.post('/launched', { vmService: 'http://127.0.0.1:9/x=/' })
-  assert.deepEqual(await receiver.post('/reload', { restart: true }), {
-    ok: false,
-    error: 'The Flutter app is not running: start it with flutter run',
-  })
+  assert.deepEqual(await receiver.post('/reload', { restart: true }), { ok: false, error: NOT_RUNNING })
 })

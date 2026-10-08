@@ -164,6 +164,9 @@ const readBody = req =>
     req.on('error', reject)
   })
 
+/** A request's body as JSON. */
+const readJson = req => readBody(req).then(JSON.parse)
+
 // Reports reach the mod in the order they arrived, each once it is prepared. Each takes its place
 // in line as it arrives and its lookups start at once, so a slow one never makes the next one read
 // a later screen.
@@ -200,9 +203,8 @@ const server = createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/launched') {
     // A React Native app sends a stack from the bundle it launched with, a Flutter app its VM
     // service; a Swift app sends nothing.
-    void readBody(req)
-      .then(body => {
-        const sent = JSON.parse(body)
+    void readJson(req)
+      .then(sent => {
         keepMap(sent.stack)
         if (typeof sent.vmService === 'string') flutterApp = sent.vmService
       })
@@ -214,7 +216,7 @@ const server = createServer(async (req, res) => {
   }
 
   if (req.method === 'POST' && url.pathname === '/report') {
-    const ready = readBody(req).then(body => prepare(JSON.parse(body), `r${++count}`))
+    const ready = readJson(req).then(sent => prepare(sent, `r${++count}`))
     ready.then(
       report => reply(res, 200, { id: report.id }),
       error => reply(res, 400, { error: String(error) }),
@@ -225,8 +227,7 @@ const server = createServer(async (req, res) => {
 
   // The mod's hot_reload tool: reload, or restart, the Flutter app that launched last.
   if (req.method === 'POST' && url.pathname === '/reload') {
-    void readBody(req)
-      .then(body => JSON.parse(body || '{}'))
+    void readJson(req)
       .catch(() => ({}))
       .then(sent =>
         flutterApp === null

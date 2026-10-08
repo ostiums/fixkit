@@ -77,6 +77,17 @@ When a prompt carries that line:
 /** The Flutter instructions for Claude Code, whose mod serves the hot_reload tool. */
 export const FLUTTER_INSTRUCTIONS = flutterInstructions({ reload: 'call the hot_reload tool', restart: 'Pass restart: true' })
 
+/**
+ * The instructions for a project of `kind`. A Flutter project's say how this harness hot reloads
+ * the app; without `flutterReload`, through the Claude Code mod's hot_reload tool.
+ * @param {ProjectKind} kind
+ * @param {{ reload: string, restart: string }} [flutterReload]
+ */
+export function instructionsFor(kind, flutterReload) {
+  if (kind === 'flutter') return flutterReload ? flutterInstructions(flutterReload) : FLUTTER_INSTRUCTIONS
+  return kind === 'react-native' ? RN_INSTRUCTIONS : INSTRUCTIONS
+}
+
 /** The tool the mod serves in a Flutter project: hot reload, or restart, the app `flutter run` runs. */
 export const HOT_RELOAD_TOOL = 'mcp__fixkit__hot_reload'
 

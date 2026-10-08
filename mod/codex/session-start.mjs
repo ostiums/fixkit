@@ -6,7 +6,7 @@ import { appendFileSync, openSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { INSTRUCTIONS, RN_INSTRUCTIONS, flutterInstructions, projectKind } from '../core/prompt.mjs'
+import { instructionsFor, projectKind } from '../core/prompt.mjs'
 import { appProject } from './project.mjs'
 
 const PORT = Number(process.env.FIXKIT_PORT ?? 4747)
@@ -42,15 +42,11 @@ try {
     } catch (error) {
       appendFileSync(LOG, `session start: ${error}\n`)
     }
-    const additionalContext = {
-      native: INSTRUCTIONS,
-      'react-native': RN_INSTRUCTIONS,
-      // Codex has no tool of the mod's: the receiver hot reloads the app for a request of its own.
-      flutter: flutterInstructions({
-        reload: `run curl -s -X POST http://127.0.0.1:${PORT}/reload, which answers {"ok":true} once the app has reloaded, or {"ok":false} with the reason`,
-        restart: `Send -d '{"restart":true}' with it`,
-      }),
-    }[projectKind(project)]
+    // Codex has no tool of the mod's: the receiver hot reloads a Flutter app for a request of its own.
+    const additionalContext = instructionsFor(projectKind(project), {
+      reload: `run curl -s -X POST http://127.0.0.1:${PORT}/reload, which answers {"ok":true} once the app has reloaded, or {"ok":false} with the reason`,
+      restart: `Send -d '{"restart":true}' with it`,
+    })
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }))
   }
 } catch (error) {

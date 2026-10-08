@@ -22,7 +22,7 @@ class Session extends ChangeNotifier {
   Target? target;
 
   /// The comment typed so far has more than spaces.
-  bool canSend = false;
+  bool get canSend => _draft.trim().isNotEmpty;
   StatusBanner? banner;
 
   /// The press outlined while the receiver takes its screenshot.
@@ -53,16 +53,13 @@ class Session extends ChangeNotifier {
     if (isBusy) return;
     _draft = '';
     target = pressed;
-    canSend = false;
     _changed();
   }
 
   void setDraft(String text) {
+    final could = canSend;
     _draft = text;
-    final can = text.trim().isNotEmpty;
-    if (can == canSend) return;
-    canSend = can;
-    _changed();
+    if (canSend != could) _changed();
   }
 
   void setLift(double value) {
@@ -137,7 +134,6 @@ class Session extends ChangeNotifier {
       } catch (_) {}
       if (mine != _ticket || _disposed || status == null) continue;
       if (isOver(status)) {
-        _ticket++;
         _show(bannerFor(status), hideAfter: const Duration(seconds: 4));
         return;
       }
@@ -152,7 +148,10 @@ class Session extends ChangeNotifier {
   }
 
   void _show(StatusBanner shown, {Duration? hideAfter}) {
-    _hide();
+    _hiding?.cancel();
+    _hiding = null;
+    // The next poll's same words: nothing to redraw.
+    if (hideAfter == null && banner?.text == shown.text) return;
     banner = shown;
     _changed();
     if (hideAfter != null) {

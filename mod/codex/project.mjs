@@ -22,8 +22,7 @@ export function appProject(cwd) {
     } catch {}
     const packageJson = names.includes('package.json') ? read(join(dir, 'package.json')) : null
     const pubspec = names.includes('pubspec.yaml') ? read(join(dir, 'pubspec.yaml')) : null
-    if (projectKind({ packageJson, pubspec }) !== 'native') return { packageJson, pubspec }
-    if (names.some(name => APPLE.test(name))) return { packageJson, pubspec }
+    if (projectKind({ packageJson, pubspec }) !== 'native' || names.some(name => APPLE.test(name))) return { packageJson, pubspec }
     if (names.includes('.git') || dirname(dir) === dir) return null
   }
 }
