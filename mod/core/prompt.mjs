@@ -14,15 +14,16 @@ export const INSTRUCTIONS = `# Fix requests from the running app
 
 A prompt that ends with a line like
 
-[fix r1] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r1.png
-[fix r2] home.quickActions.send · App/Home/QuickActions.swift:8 · Button "Send" · .fixkit/reports/r2.png
+[fix r1] TransactionRow › Text · Features/Home/TransactionRow.swift:29 · used at Features/Home/HomeView.swift:60 · StaticText "−€7.40" near "Coffee" · .fixkit/reports/r1.png
+[fix r2] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r2.png
 [fix r3] ProfileViewController.nameLabel · UILabel "Alex Morgan" · .fixkit/reports/r3.png
 
-was sent from the iOS app running in the simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the name and the file and line of its .fixable("name") modifier when the app marks it; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); in a UIKit app, the view named after the property that holds it as Type.property, or its class and text, and its view controller as the screen; the screen's name when the app gives one; and a screenshot with the element outlined in red, or a red ring where the finger was.
+was sent from the iOS app running in the simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: in SwiftUI, the view's type after the app's view around it or after its .fixable("name"), the file and line where the view's expression starts, and where the app's views around it are used; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); in a UIKit app, the view named after the property that holds it as Type.property, or its class and text, and its view controller as the screen; the screen's name when the app gives one; and a screenshot with the element outlined in red, or a red ring where the finger was.
 
 When a prompt carries that line:
 - Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
-- With a file and line, start there: the cause is on that view or the one it wraps.
+- With a file and line, start there: the cause is in that view's expression and its modifiers, in the view around it, or in what is passed where that view is used.
+- When accessibility names something that is not at that line, something drawn over that view was pressed, such as a bar over a list: go by accessibility and the screenshot.
 - With a Type.property name, start at that property's declaration and where it is configured.
 - Without one, find the view by searching the Swift sources for the label and the labels beside it; a label made from data (an amount, a date) is found through the view that formats it, so search the neighbouring fixed labels first.
 - Make the smallest change that does what was asked. Do not refactor.

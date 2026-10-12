@@ -182,6 +182,32 @@ test('a React Native element leads with its components, its JSX line and where i
   )
 })
 
+test('a SwiftUI view leads with its component, its line and where the component is used', () => {
+  const prompt = promptFor(
+    {
+      id: 'r9',
+      comment: 'Should be bold',
+      screen: 'Home',
+      screenshot: '.fixkit/reports/r9.png',
+      element: {
+        name: 'TransactionRow › Text',
+        file: '/p/Tally/Features/Home/TransactionRow.swift',
+        line: 29,
+        usedAt: [{ file: '/p/Tally/Features/Home/HomeView.swift', line: 60 }],
+      },
+      accessibility: { element: { ...amount.element, label: '−€7.40' }, within: null, nearby: [] },
+    },
+    'Tally/Features/Home/TransactionRow.swift:29',
+    ['Tally/Features/Home/HomeView.swift:60'],
+  )
+
+  expect(prompt).toBe(
+    'Should be bold\n\n' +
+      '[fix r9] TransactionRow › Text · Tally/Features/Home/TransactionRow.swift:29 · used at Tally/Features/Home/HomeView.swift:60 · StaticText "−€7.40" · .fixkit/reports/r9.png',
+  )
+  expect(INSTRUCTIONS).toContain('used at')
+})
+
 test('a package.json that depends on React Native makes a React Native project', () => {
   const app = JSON.stringify({ dependencies: { expo: '~57.0.27', react: '19.2.3', 'react-native': '0.86.3' } })
   expect(isReactNativeProject(app)).toBe(true)
