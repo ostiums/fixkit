@@ -25,14 +25,16 @@ export type Incoming = {
   screenshot: string | null
   touch?: { x: number; y: number }
   /**
-   * The element under the touch: one marked with `.fixable`, with its source line, or in a UIKit
-   * app a view named after the property that holds it (`ProfileViewController.nameLabel`), without one.
+   * The element under the touch: a SwiftUI view named after the app's view around it
+   * (`TransactionRow › Text`) with the line its expression starts on, one marked with `.fixable`
+   * with its source line, or in a UIKit app a view named after the property that holds it
+   * (`ProfileViewController.nameLabel`), without one.
    */
   element?: {
     name: string
     file?: string
     line?: number
-    /** React Native and Flutter: where the components around the element are used, nearest first. */
+    /** Where the app's components around the element are used, nearest first. */
     usedAt?: { file: string; line: number }[]
   }
   /** UIKit only: the pressed view's class and text, as the app sees it. */
