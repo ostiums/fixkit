@@ -6,6 +6,11 @@ private struct Row: View {
     var body: some View { Text("Coffee") }
 }
 
+/// A shape the app declares, as cards draw their background with.
+private struct CardShape: Shape {
+    func path(in rect: CGRect) -> Path { Path(rect) }
+}
+
 private struct Screen: View {
     var body: some View { Row() }
 }
@@ -143,6 +148,15 @@ struct FixLocatorTests {
         let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen, clips: [], fixable: fixable)
 
         #expect(element?.name == "Row › Text")
+    }
+
+    @Test func anAppShapeBehindTheContentIsNoComponent() {
+        var marks = screen
+        marks.insert(mark(CardShape.self, 13, CGRect(x: 0, y: 100, width: 400, height: 60)), at: 3)
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: marks, clips: [], fixable: nil)
+
+        #expect(element?.name == "Row › Text")
+        #expect(element?.usedAt == [source(12), source(1)])
     }
 
     @Test func nothingUnderThePoint() {

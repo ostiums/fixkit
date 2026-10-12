@@ -114,11 +114,12 @@ enum FixLocator {
         // The views around it are painted before it.
         let around = under.filter { $0.offset < index && holds($0.element.frame, pressed.frame) }.map(\.element)
 
-        // The app's own views around it: types declared in a module whose code carries marks.
+        // The app's own views around it: types declared in a module whose code carries marks. An
+        // app's own shape is still a background.
         let modules = Set(marks.map(\.module))
         var components: [FixMark] = []
         for mark in around
-        where modules.contains(module(of: mark.type)) && mark.source != pressed.source
+        where modules.contains(module(of: mark.type)) && !isDecoration(mark.type) && mark.source != pressed.source
             && !components.contains(where: { $0.source == mark.source }) {
             components.append(mark)
         }

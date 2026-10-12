@@ -27,6 +27,9 @@ trap 'rm -rf "$package"' EXIT
 ln -s "$PWD/Package.swift" "$PWD/Sources" "$PWD/Tests" "$package/"
 SIMULATOR=${SIMULATOR:-iPhone 18 Pro}
 (cd "$package" && xcodebuild -scheme FixKit -destination "platform=iOS Simulator,name=$SIMULATOR" -quiet test)
+# The package without its default trait, as an app that turns source locations off builds it.
+(cd "$package" && xcrun swift build -q --disable-default-traits \
+  --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" --triple arm64-apple-ios17.0-simulator)
 
 for configuration in Debug Release; do
   xcodebuild -project Tally.xcodeproj -scheme Tally -configuration "$configuration" \
