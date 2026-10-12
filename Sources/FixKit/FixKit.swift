@@ -47,6 +47,8 @@ struct FixElement: Equatable {
     /// Where a mark was declared; a UIKit view named after the property that holds it has none.
     let source: FixSource?
     var frame: CGRect
+    /// SwiftUI: where the app's views around the element are used, nearest first.
+    var usedAt: [FixSource] = []
 
     /// Of overlapping elements, the innermost has the smallest frame.
     var area: CGFloat { frame.width * frame.height }

@@ -1,0 +1,107 @@
+#if DEBUG
+import SwiftUI
+
+/// A view's source mark with its frame in the window.
+struct FixMark {
+    /// `Module/File.swift`.
+    let fileID: String
+    let source: FixSource
+    /// The view expression's type, `ModifiedContent` and all.
+    let type: Any.Type
+    var frame: CGRect
+
+    var module: Substring { fileID.prefix { $0 != "/" } }
+    var area: CGFloat { frame.width * frame.height }
+}
+
+/// Finds the SwiftUI view under a press among the source marks every view carries: where it is
+/// written, the app's view around it and where that view is used.
+@MainActor
+enum FixLocator {
+    /// The view under the point: the innermost mark there that is not decoration, named after the
+    /// `.fixable` element or the app's own view around it. `marks` come in the order SwiftUI paints
+    /// them; `clips` are the frames of the scroll views on screen.
+    static func element(at point: CGPoint, among marks: [FixMark], clips: [CGRect], fixable: FixElement?) -> FixElement? {
+        let marks = marks.compactMap { mark -> FixMark? in
+            guard mark.module != "FixKit" else { return nil }
+            var mark = mark
+            mark.frame = clipped(mark.frame, to: clips)
+            return mark.frame.isEmpty ? nil : mark
+        }
+        // Innermost first: of nested marks the smallest, of equal ones the later painted, which
+        // SwiftUI enumerates after the views around it. Not the last painted alone: a transparent
+        // container laid over the whole screen would win every press.
+        let under = marks.enumerated()
+            .filter { $0.element.frame.contains(point) }
+            .sorted { ($0.element.area, $1.offset) < ($1.element.area, $0.offset) }
+            .map(\.element)
+        guard let index = under.firstIndex(where: { !isDecoration($0.type) }) ?? under.indices.first else { return nil }
+        let pressed = under[index]
+        let around = under[(index + 1)...].filter { $0.frame.insetBy(dx: -1, dy: -1).contains(pressed.frame) }
+
+        // The app's own views around it: types declared in a module whose code carries marks.
+        let modules = Set(marks.map(\.module))
+        var components: [FixMark] = []
+        for mark in around
+        where modules.contains(module(of: mark.type)) && mark.source != pressed.source
+            && !components.contains(where: { $0.source == mark.source }) {
+            components.append(mark)
+        }
+        let component = components.first
+        // A .fixable name stands for the component when it marks that component or a view inside it.
+        let owner = if let fixable, component.map({ $0.frame.insetBy(dx: -1, dy: -1).contains(fixable.frame) }) ?? true {
+            fixable.name
+        } else {
+            component.map { name(of: $0.type) }
+        }
+        let type = name(of: pressed.type)
+        return FixElement(
+            name: owner.map { "\($0) › \(type)" } ?? type, source: pressed.source, frame: pressed.frame,
+            usedAt: components.prefix(2).map(\.source))
+    }
+
+    /// The frame cut to each scroll view it crosses without containing it: content scrolled past a
+    /// scroll view's edge is not on screen there.
+    static func clipped(_ frame: CGRect, to clips: [CGRect]) -> CGRect {
+        clips.reduce(frame) { frame, clip in
+            !frame.intersects(clip) || frame.insetBy(dx: -1, dy: -1).contains(clip) ? frame : frame.intersection(clip)
+        }
+    }
+
+    /// The type with SwiftUI's `ModifiedContent` taken off: `Text` for `Text("a").padding()`.
+    private static func unwrapped(_ type: Any.Type) -> Any.Type {
+        var type = type
+        while let modified = type as? any FixModified.Type {
+            type = modified.content
+        }
+        return type
+    }
+
+    /// Shapes, colors, gradients and spacers: what backgrounds and overlays are drawn with.
+    private static func isDecoration(_ type: Any.Type) -> Bool {
+        let type = unwrapped(type)
+        return type is any Shape.Type || type is any ShapeStyle.Type || type is any FixDecoration.Type
+    }
+
+    /// `TransactionRow` for `TransactionRow`, `HStack` for `HStack<TupleView<…>>`.
+    private static func name(of type: Any.Type) -> String {
+        String(String(describing: unwrapped(type)).prefix { $0 != "<" })
+    }
+
+    private static func module(of type: Any.Type) -> Substring {
+        String(reflecting: unwrapped(type)).prefix { $0 != "." }
+    }
+}
+
+private protocol FixModified {
+    static var content: Any.Type { get }
+}
+
+extension ModifiedContent: FixModified {
+    fileprivate static var content: Any.Type { Content.self }
+}
+
+private protocol FixDecoration {}
+extension _ShapeView: FixDecoration {}
+extension Spacer: FixDecoration {}
+#endif
