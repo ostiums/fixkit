@@ -114,6 +114,37 @@ struct FixLocatorTests {
         #expect(element?.name == "Row › Text")
     }
 
+    @Test func aRingDrawnAroundAnIconGivesWayToIt() {
+        let icon = mark(Image.self, 50, CGRect(x: 60, y: 520, width: 40, height: 40))
+        let ring = mark(StrokeBorderShapeView<Circle, Color, EmptyView>.self, 51, CGRect(x: 60, y: 520, width: 40, height: 40))
+        let element = FixLocator.element(at: CGPoint(x: 80, y: 540), among: screen + [icon, ring], clips: [], fixable: nil)
+
+        #expect(element?.source == source(50))
+    }
+
+    @Test func aViewDrawnOverPartOfAnotherCoversIt() {
+        // A row's label scrolled under a tab button: the button is painted later and does not hold it.
+        let label = mark(Text.self, 21, CGRect(x: 90, y: 806, width: 96, height: 14))
+        let button = mark(VStack<Text>.self, 60, CGRect(x: 12, y: 778, width: 126, height: 62))
+        let element = FixLocator.element(at: CGPoint(x: 100, y: 812), among: screen + [label, button], clips: [], fixable: nil)
+
+        #expect(element?.source == source(60))
+    }
+
+    @Test func aContainerPaintedLaterIsNotAComponent() {
+        let overlay = mark(Screen.self, 30, CGRect(x: 0, y: 0, width: 400, height: 800))
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen + [overlay], clips: [], fixable: nil)
+
+        #expect(element?.usedAt == [source(12), source(1)])
+    }
+
+    @Test func aFixableBesideThePressedViewDoesNotLendItsName() {
+        let fixable = FixElement(name: "tab.home", source: nil, frame: CGRect(x: 0, y: 100, width: 25, height: 60))
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen, clips: [], fixable: fixable)
+
+        #expect(element?.name == "Row › Text")
+    }
+
     @Test func nothingUnderThePoint() {
         #expect(FixLocator.element(at: CGPoint(x: 30, y: 900), among: screen, clips: [], fixable: nil) == nil)
     }
