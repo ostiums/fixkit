@@ -94,13 +94,25 @@ enum FixLocator {
         // Innermost first: of nested marks the smallest, of equal ones the later painted, which
         // SwiftUI enumerates after the views around it. Not the last painted alone: a transparent
         // container laid over the whole screen would win every press.
-        let under = marks.enumerated()
+        var under = marks.enumerated()
             .filter { $0.element.frame.contains(point) }
             .sorted { ($0.element.area, $1.offset) < ($1.element.area, $0.offset) }
-            .map(\.element)
-        guard let index = under.firstIndex(where: { !isDecoration($0.type) }) ?? under.indices.first else { return nil }
-        let pressed = under[index]
-        let around = under[(index + 1)...].filter { $0.frame.insetBy(dx: -1, dy: -1).contains(pressed.frame) }
+        var pressed: (offset: Int, element: FixMark)?
+        while let candidate = under.first(where: { !isDecoration($0.element.type) }) ?? under.first {
+            // A view painted later that covers only part of the candidate is no view around it but
+            // one drawn over it, such as a tab bar over a row scrolled under it.
+            let covered = under.contains {
+                $0.offset > candidate.offset && !isDecoration($0.element.type) && !holds($0.element.frame, candidate.element.frame)
+            }
+            guard covered else {
+                pressed = candidate
+                break
+            }
+            under.removeAll { $0.offset == candidate.offset }
+        }
+        guard let (index, pressed) = pressed else { return nil }
+        // The views around it are painted before it.
+        let around = under.filter { $0.offset < index && holds($0.element.frame, pressed.frame) }.map(\.element)
 
         // The app's own views around it: types declared in a module whose code carries marks.
         let modules = Set(marks.map(\.module))
@@ -111,8 +123,9 @@ enum FixLocator {
             components.append(mark)
         }
         let component = components.first
-        // A .fixable name stands for the component when it marks that component or a view inside it.
-        let owner = if let fixable, component.map({ $0.frame.insetBy(dx: -1, dy: -1).contains(fixable.frame) }) ?? true {
+        // A .fixable name stands for the component when it marks the pressed view, the component or
+        // a view between them.
+        let owner = if let fixable, holds(fixable.frame, pressed.frame), component.map({ holds($0.frame, fixable.frame) }) ?? true {
             fixable.name
         } else {
             component.map { name(of: $0.type) }
@@ -123,11 +136,16 @@ enum FixLocator {
             usedAt: components.prefix(2).map(\.source))
     }
 
+    /// Whether the outer frame holds the inner one, give or take a point.
+    private static func holds(_ outer: CGRect, _ inner: CGRect) -> Bool {
+        outer.insetBy(dx: -1, dy: -1).contains(inner)
+    }
+
     /// The frame cut to each scroll view it crosses without containing it: content scrolled past a
     /// scroll view's edge is not on screen there.
     static func clipped(_ frame: CGRect, to clips: [CGRect]) -> CGRect {
         clips.reduce(frame) { frame, clip in
-            !frame.intersects(clip) || frame.insetBy(dx: -1, dy: -1).contains(clip) ? frame : frame.intersection(clip)
+            !frame.intersects(clip) || holds(frame, clip) ? frame : frame.intersection(clip)
         }
     }
 
@@ -140,10 +158,11 @@ enum FixLocator {
         return type
     }
 
-    /// Shapes, colors, gradients and spacers: what backgrounds and overlays are drawn with.
+    /// Shapes, filled or stroked, colors, gradients and spacers: what backgrounds and overlays are
+    /// drawn with.
     private static func isDecoration(_ type: Any.Type) -> Bool {
         let type = unwrapped(type)
-        return type is any Shape.Type || type is any ShapeStyle.Type || type is any FixDecoration.Type
+        return type is any Shape.Type || type is any ShapeView.Type || type is any ShapeStyle.Type || type is Spacer.Type
     }
 
     /// `TransactionRow` for `TransactionRow`, `HStack` for `HStack<TupleView<…>>`.
@@ -174,7 +193,4 @@ extension ModifiedContent: FixModified {
     fileprivate static var content: Any.Type { Content.self }
 }
 
-private protocol FixDecoration {}
-extension _ShapeView: FixDecoration {}
-extension Spacer: FixDecoration {}
 #endif
