@@ -97,36 +97,27 @@ Differences from Claude Code:
 
 ## Pointing at the right code
 
-Nothing has to be marked. Marks make a report point at an exact line.
+Nothing has to be marked. SwiftUI views carry their own lines; UIKit views are named after their properties.
 
 ### SwiftUI
 
-Unmarked, the element is named by accessibility, with the labels around it. The agent searches the sources for them:
+Every view reports the line its code starts on, the app's view around it and where that view is used:
 
 ```
-[fix r1] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · Activity screen · .fixkit/reports/r1.png
+[fix r1] TransactionRow › Text · Features/Home/TransactionRow.swift:29 · used at Features/Home/HomeView.swift:60 · StaticText "−€7.40" near "Coffee" · .fixkit/reports/r1.png
 ```
 
-`.fixable` adds the element's name, file and line:
+- **The innermost view wins:** a press on a row's amount names the amount's `Text`, a press between the row's labels names its `HStack`.
+- **Backgrounds and overlays step aside:** shapes, colours and spacers lose to the content they sit behind or around.
+- **`.fixable("name")` is optional:** it names the element (`card.holderName › Text`) and lets [scripted recordings](#scripted-recordings) press it. Names may carry data: `.fixable("transaction.amount.\(merchant)")`.
+- **`.fixScreen("Home")`** names the screen. With a `TabView`: `.fixScreen(selectedTab.rawValue)`.
 
-```swift
-VStack(alignment: .leading) {
-    Text(card.number)
-        .fixable("card.number")
-    Text(card.holderName)
-        .fixable("card.holderName")
-}
-.fixable("home.walletCard")
-```
+FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it. Where it falls short:
 
-```
-[fix r2] card.holderName · Features/Home/WalletCardView.swift:7 · StaticText "Alex Morgan" · .fixkit/reports/r2.png
-```
-
-- **The innermost mark wins:** the holder name reports `card.holderName`, the rest of the card `home.walletCard`.
-- **Mark the view whose code should change:** the `Text` for a typo or colour, the container for layout.
-- **Names are yours** and may carry data: `.fixable("transaction.amount.\(merchant)")`.
-- **`.fixScreen("Home")`** names the screen for unmarked elements. With a `TabView`: `.fixScreen(selectedTab.rawValue)`.
+- **A body with an explicit `return`** is named where it is used, and so is a view from another package.
+- **A view under another in the same SwiftUI hierarchy**, such as a row scrolled under a custom tab bar, can win over it, and `.offset` moves a view without its frame. Accessibility and the screenshot in the report show what was pressed.
+- **The `MemberImportVisibility` upcoming feature** needs `import FixKit` in every file with views.
+- **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Without it, an unmarked view is named by accessibility and a `.fixable` view by its mark's line.
 
 ### UIKit
 
