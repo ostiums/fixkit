@@ -54,7 +54,7 @@ When a prompt carries that line:
  * the harness hot reloads the app: `reload` asks for a reload, `restart` for a restart instead.
  * @param {{ reload: string, restart: string }} how
  */
-export function flutterInstructions({ reload, restart }) {
+function flutterInstructions({ reload, restart }) {
   return `# Fix requests from the running app
 
 A prompt that ends with a line like
@@ -74,8 +74,8 @@ When a prompt carries that line:
 - Answer in one or two sentences: what was wrong and what changed.`
 }
 
-/** The Flutter instructions for Claude Code, whose mod serves the hot_reload tool. */
-export const FLUTTER_INSTRUCTIONS = flutterInstructions({ reload: 'call the hot_reload tool', restart: 'Pass restart: true' })
+// How Claude Code hot reloads the app: through the hot_reload tool its mod serves.
+const HOT_RELOAD_TOOL_USE = { reload: 'call the hot_reload tool', restart: 'Pass restart: true' }
 
 /**
  * The instructions for a project of `kind`. A Flutter project's say how this harness hot reloads
@@ -83,10 +83,13 @@ export const FLUTTER_INSTRUCTIONS = flutterInstructions({ reload: 'call the hot_
  * @param {ProjectKind} kind
  * @param {{ reload: string, restart: string }} [flutterReload]
  */
-export function instructionsFor(kind, flutterReload) {
-  if (kind === 'flutter') return flutterReload ? flutterInstructions(flutterReload) : FLUTTER_INSTRUCTIONS
+export function instructionsFor(kind, flutterReload = HOT_RELOAD_TOOL_USE) {
+  if (kind === 'flutter') return flutterInstructions(flutterReload)
   return kind === 'react-native' ? RN_INSTRUCTIONS : INSTRUCTIONS
 }
+
+/** The Flutter instructions for Claude Code, whose mod serves the hot_reload tool. */
+export const FLUTTER_INSTRUCTIONS = instructionsFor('flutter')
 
 /** The tool the mod serves in a Flutter project: hot reload, or restart, the app `flutter run` runs. */
 export const HOT_RELOAD_TOOL = 'mcp__fixkit__hot_reload'

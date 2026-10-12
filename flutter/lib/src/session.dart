@@ -9,8 +9,8 @@ import 'banners.dart';
 import 'client.dart';
 import 'report.dart';
 
-// How long the host's animation takes to slide the app back down.
-const _liftSettles = Duration(milliseconds: 400);
+/// How long the host takes to slide the app up above the composer, or back down.
+const slideDuration = Duration(milliseconds: 300);
 
 /// A report from the long press to the fix on screen: the composer, the sending, the banners.
 class Session extends ChangeNotifier {
@@ -30,9 +30,6 @@ class Session extends ChangeNotifier {
 
   /// A report is on its way: the receiver answers once it has read the screen.
   bool sending = false;
-
-  /// How far the app is slid up so the composer does not cover the pressed element.
-  double lift = 0;
 
   String _draft = '';
   // Each follow holds a ticket; a newer follow or a new report retires the older one.
@@ -62,34 +59,28 @@ class Session extends ChangeNotifier {
     if (canSend != could) _changed();
   }
 
-  void setLift(double value) {
-    if (value == lift) return;
-    lift = value;
-    _changed();
-  }
-
   void cancel() {
     target = null;
-    lift = 0;
     _changed();
   }
 
-  Future<void> send() async {
+  /// Sends the report; `lifted` when the host has slid the app up, which it now slides back down.
+  Future<void> send({bool lifted = false}) async {
     final pressed = target;
     final comment = _draft.trim();
     if (pressed == null || comment.isEmpty || sending) return;
 
-    final lifted = lift > 0;
     _ticket++;
-    _hide();
+    _hiding?.cancel();
+    _hiding = null;
+    banner = null;
     target = null;
-    lift = 0;
     sending = true;
     _changed();
     // The receiver takes the screenshot and reads the screen as the report arrives, so the report
     // leaves once the composer and the keyboard are gone, the app has slid back down and the
     // outline is on screen.
-    await Future.wait([_keyboardGone(), if (lifted) Future<void>.delayed(_liftSettles)]);
+    await Future.wait([_keyboardGone(), if (lifted) Future<void>.delayed(slideDuration + const Duration(milliseconds: 100))]);
     outline = pressed;
     _changed();
     await _frames(2);
@@ -125,14 +116,16 @@ class Session extends ChangeNotifier {
 
   Future<void> _follow(String id) async {
     final mine = ++_ticket;
-    while (mine == _ticket && !_disposed) {
+    // Dispose retires the ticket too.
+    while (mine == _ticket) {
       await _sleep(const Duration(seconds: 1));
-      if (_disposed) return;
+      if (mine != _ticket) return;
       String? status;
       try {
         status = (await _client.statusOf(id)).status;
       } catch (_) {}
-      if (mine != _ticket || _disposed || status == null) continue;
+      if (mine != _ticket) return;
+      if (status == null) continue;
       if (isOver(status)) {
         _show(bannerFor(status), hideAfter: const Duration(seconds: 4));
         return;
@@ -162,21 +155,16 @@ class Session extends ChangeNotifier {
     }
   }
 
-  void _hide() {
-    _hiding?.cancel();
-    _hiding = null;
-    if (banner == null) return;
-    banner = null;
-    _changed();
-  }
-
   /// Resolves once the keyboard has slid away, or after a second.
   Future<void> _keyboardGone() async {
     FocusManager.instance.primaryFocus?.unfocus();
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    for (var waited = 0; waited < 1000 && (view?.viewInsets.bottom ?? 0) > 0; waited += 16) {
-      await Future<void>.delayed(const Duration(milliseconds: 16));
+    var late = false;
+    final limit = Timer(const Duration(seconds: 1), () => late = true);
+    while ((view?.viewInsets.bottom ?? 0) > 0 && !late) {
+      await SchedulerBinding.instance.endOfFrame;
     }
+    limit.cancel();
   }
 
   Future<void> _frames(int count) async {

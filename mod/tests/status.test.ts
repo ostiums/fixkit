@@ -1,5 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import type { Engine } from 'claude-code/testing'
 
 import { FLUTTER_INSTRUCTIONS, HOT_RELOAD_TOOL, INSTRUCTIONS, RN_INSTRUCTIONS } from '../hooks/prompt'
 import { FAILED } from '../server/flutter.mjs'
@@ -90,13 +91,19 @@ async function until(done: () => boolean) {
 const turnEnd = { answer: 'Fixed.', durationMs: 1, isAborted: false, turnId: 't1' } as const
 const report = { type: 'report', report: { id: 'r1', comment: 'Income should be green', screen: 'Activity', screenshot: null } }
 
-test('a launch during the fix makes the report live, and an answer keeps it live', async ($, on) => {
-  const { receiver, statuses, submission } = world(on)
+/** Starts the session, its receiver ready on `port`, and hands Claude the report to fix. */
+async function fixing($: Engine, { receiver, statuses, submission }: ReturnType<typeof world>, port: number) {
   await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
-  receiver.send({ type: 'ready', port: 4747 })
+  receiver.send({ type: 'ready', port })
   receiver.send(report)
   await submission
   await until(() => statuses.at(-1)?.r1 === 'fixing')
+}
+
+test('a launch during the fix makes the report live, and an answer keeps it live', async ($, on) => {
+  const mod = world(on)
+  const { receiver, statuses } = mod
+  await fixing($, mod, 4747)
 
   await $.tool.call({ tool: 'mcp__XcodeBuildMCP__build_run_sim' })
   receiver.send({ type: 'launched' })
@@ -160,12 +167,9 @@ test('a native project registers no tool', async ($, on) => {
 })
 
 test('hot_reload asks the receiver, and the reload it causes makes the fix live', async ($, on) => {
-  const { receiver, statuses, submission, fetched } = world(on, { 'pubspec.yaml': pubspec })
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
-  receiver.send({ type: 'ready', port: 4757 })
-  receiver.send(report)
-  await submission
-  await until(() => statuses.at(-1)?.r1 === 'fixing')
+  const mod = world(on, { 'pubspec.yaml': pubspec })
+  const { receiver, statuses, fetched } = mod
+  await fixing($, mod, 4757)
 
   const { result } = await $.tool.call({ tool: HOT_RELOAD_TOOL, restart: true })
   receiver.send({ type: 'launched' })
@@ -177,17 +181,13 @@ test('hot_reload asks the receiver, and the reload it causes makes the fix live'
 })
 
 test("a failed reload is the tool's error, and the report goes back to fixing", async ($, on) => {
-  const { receiver, statuses, submission, answerReload } = world(on, { 'pubspec.yaml': pubspec })
-  answerReload(JSON.stringify({ ok: false, error: FAILED }))
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
-  receiver.send({ type: 'ready', port: 4757 })
-  receiver.send(report)
-  await submission
-  await until(() => statuses.at(-1)?.r1 === 'fixing')
+  const mod = world(on, { 'pubspec.yaml': pubspec })
+  mod.answerReload(JSON.stringify({ ok: false, error: FAILED }))
+  await fixing($, mod, 4757)
 
   const result = await $.tool.call({ tool: HOT_RELOAD_TOOL })
 
   expect(result.isError).toBe(true)
   expect(result.text).toContain('dart analyze')
-  expect(statuses.at(-1)?.r1).toBe('fixing')
+  expect(mod.statuses.at(-1)?.r1).toBe('fixing')
 })

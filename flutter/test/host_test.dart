@@ -79,5 +79,18 @@ void main() {
     // What the Scaffold sees: it would shrink its body by it.
     expect(MediaQuery.viewInsetsOf(tester.element(find.byType(Scaffold))).bottom, 0);
     expect(find.byType(EditableText), findsOneWidget);
+
+    // Sent, the composer is gone while its keyboard still slides away.
+    await tester.enterText(find.byType(EditableText), 'Make it green');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(find.byType(EditableText), findsNothing);
+    expect(MediaQuery.viewInsetsOf(tester.element(find.byType(Scaffold))).bottom, 0);
+
+    // The report leaves once the keyboard is gone; no receiver answers it, and the banner says so.
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.pump(const Duration(seconds: 5));
   }, variant: iOS);
 }

@@ -54,6 +54,8 @@ class _DebugHostState extends State<DebugHost> {
 
   @override
   Widget build(BuildContext context) {
+    final target = _session.target;
+    final lift = target == null ? 0.0 : composerLift(target, MediaQuery.sizeOf(context), MediaQuery.viewInsetsOf(context).bottom);
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
       gestures: {
@@ -70,15 +72,16 @@ class _DebugHostState extends State<DebugHost> {
             AbsorbPointer(
               absorbing: _session.sending,
               child: TweenAnimationBuilder<double>(
-                tween: Tween(end: _session.lift),
-                duration: const Duration(milliseconds: 300),
+                tween: Tween(end: lift),
+                duration: slideDuration,
                 curve: Curves.easeOut,
                 builder: (context, lift, child) => Transform.translate(offset: Offset(0, -lift), child: child),
-                // The composer's keyboard is FixKit's, not the app's: a Scaffold would shrink its
-                // body under the lit element. Always a MediaQuery, so the app's tree keeps its shape.
+                // The composer's keyboard is FixKit's, not the app's, also while it slides away: a
+                // Scaffold would shrink its body under the lit element. Always a MediaQuery, so the
+                // app's tree keeps its shape.
                 child: MediaQuery.removeViewInsets(
                   context: context,
-                  removeBottom: _session.target != null,
+                  removeBottom: _session.isBusy,
                   child: widget.child,
                 ),
               ),

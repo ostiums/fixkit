@@ -7,6 +7,8 @@ import 'report.dart';
 /// builds track widget creation (`--track-widget-creation`, on in every `flutter run`); the widget
 /// inspector reads the location out and says whether it is outside the Flutter SDK.
 Source? appSource(Element element) {
+  // The cheap check first: serializing every framework element under the finger is not.
+  if (!debugIsWidgetLocalCreation(element.widget)) return null;
   final json = element.toDiagnosticsNode().toJsonMap(InspectorSerializationDelegate(service: WidgetInspectorService.instance));
   final location = json['creationLocation'];
   if (json['createdByLocalProject'] != true || location is! Map) return null;
@@ -44,50 +46,50 @@ Target inspectAt(Offset touch, Element host) {
   try {
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(result, touch, View.of(host).viewId);
-    // Each element's source read once: the chains of the hit entries share most of their elements.
+    // Each element's source read once: the hit entries share most of their ancestors.
     final sources = <Element, Source?>{};
     Source? sourceOf(Element element) => sources.putIfAbsent(element, () => appSource(element));
     // Every entry counts, not only the first: an iOS page's back swipe strip lies over its left
     // 20 pt, and the app's widget nearest to it is the app itself. The deepest app widget wins.
-    List<Element>? best;
-    var bestAt = -1;
+    Element? best;
     for (final entry in result.path) {
       final target = entry.target;
       if (target is! RenderObject) continue;
       final creator = target.debugCreator;
       if (creator is! DebugCreator) continue;
-      final chain = _chain(creator.element, host);
-      if (chain == null) continue;
-      final at = chain.indexWhere((element) => sourceOf(element) != null);
-      if (at >= 0 && (best == null || chain[at].depth > best[bestAt].depth)) {
-        best = chain;
-        bestAt = at;
-      }
+      final found = _appElementAt(creator.element, host, sourceOf);
+      if (found != null && (best == null || found.depth > best.depth)) best = found;
     }
-    if (best != null) return Target(touch, _found(best, bestAt, sourceOf));
+    if (best != null) return Target(touch, _found(best, host, sourceOf));
   } catch (_) {}
   return Target(touch);
 }
 
-/// The element and its ancestors up to `host`, nearest first; null for one outside `host`.
-List<Element>? _chain(Element deepest, Element host) {
-  final chain = <Element>[deepest];
-  var inside = deepest == host;
+/// The nearest element at or above `element` that the app constructed; null without one, or for an
+/// element outside `host`.
+Element? _appElementAt(Element element, Element host, Source? Function(Element) sourceOf) {
+  var found = sourceOf(element) != null ? element : null;
+  var inside = element == host;
   if (!inside) {
-    deepest.visitAncestorElements((ancestor) {
-      chain.add(ancestor);
+    element.visitAncestorElements((ancestor) {
+      if (found == null && sourceOf(ancestor) != null) found = ancestor;
       inside = ancestor == host;
       return !inside;
     });
   }
-  return inside ? chain : null;
+  return inside ? found : null;
 }
 
-/// The app's element at `index` of `chain`, named after the app's widget classes above it.
-Found _found(List<Element> chain, int index, Source? Function(Element) sourceOf) {
-  final element = chain[index];
+/// The app's `element`, named after the app's widget classes above it, up to `host`.
+Found _found(Element element, Element host, Source? Function(Element) sourceOf) {
   final source = sourceOf(element)!;
-  final components = chain.skip(index + 1).where((each) => _isAppComponent(each, sourceOf)).take(2).toList();
+  final components = <Element>[];
+  if (element != host) {
+    element.visitAncestorElements((ancestor) {
+      if (_isAppComponent(ancestor, sourceOf)) components.add(ancestor);
+      return components.length < 2 && ancestor != host;
+    });
+  }
   final type = element.widget.runtimeType.toString();
   return Found(
     name: components.isEmpty ? type : '${components.first.widget.runtimeType} › $type',
