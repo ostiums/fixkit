@@ -37,7 +37,7 @@ extension View {
 
 #if DEBUG
 /// Where a mark was declared.
-struct FixSource: Equatable {
+struct FixSource: Hashable {
     let file: String
     let line: Int
 }
@@ -51,7 +51,7 @@ struct FixElement: Equatable {
     var usedAt: [FixSource] = []
 
     /// Of overlapping elements, the innermost has the smallest frame.
-    var area: CGFloat { frame.width * frame.height }
+    var area: CGFloat { frame.area }
 }
 
 /// The marked elements: SwiftUI's with their frames in window coordinates as layout changes,
@@ -126,6 +126,10 @@ extension UIView {
     func frame(in window: UIWindow) -> CGRect {
         convert(bounds, to: window)
     }
+}
+
+extension CGRect {
+    var area: CGFloat { width * height }
 }
 
 private struct FixableModifier: ViewModifier {

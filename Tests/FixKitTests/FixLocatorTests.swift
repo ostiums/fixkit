@@ -159,6 +159,17 @@ struct FixLocatorTests {
         #expect(element?.usedAt == [source(12), source(1)])
     }
 
+    @Test func ofASwiftUIAndAUIKitFindingTheInnerOneWins() {
+        let row = FixElement(name: "Row › HStack", source: source(20), frame: CGRect(x: 0, y: 100, width: 400, height: 60))
+        let label = FixElement(name: "map.label", source: nil, frame: CGRect(x: 20, y: 110, width: 100, height: 20))
+        let container = FixElement(name: "HostViewController.container", source: nil, frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+
+        #expect(FixLocator.inner(row, label) == label)
+        #expect(FixLocator.inner(row, container) == row)
+        #expect(FixLocator.inner(nil, container) == container)
+        #expect(FixLocator.inner(row, nil) == row)
+    }
+
     @Test func nothingUnderThePoint() {
         #expect(FixLocator.element(at: CGPoint(x: 30, y: 900), among: screen, clips: [], fixable: nil) == nil)
     }

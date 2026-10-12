@@ -56,7 +56,7 @@ enum FixInspector {
     }
 
     /// The responder chain below the window: views, their view controllers, and their parents.
-    private static func responders(from view: UIView) -> some Sequence<UIResponder> {
+    static func responders(from view: UIView) -> some Sequence<UIResponder> {
         sequence(first: view as UIResponder, next: \.next).prefix { !($0 is UIWindow) }
     }
 
