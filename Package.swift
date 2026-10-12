@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 import PackageDescription
 
 let package = Package(
@@ -6,6 +6,13 @@ let package = Package(
     platforms: [.iOS(.v17)],
     products: [
         .library(name: "FixKit", targets: ["FixKit"])
+    ],
+    traits: [
+        .trait(
+            name: "SourceLocations",
+            description: "Every SwiftUI view carries the file and line it is written on, so reports point at it without .fixable"
+        ),
+        .default(enabledTraits: ["SourceLocations"]),
     ],
     targets: [
         .target(
