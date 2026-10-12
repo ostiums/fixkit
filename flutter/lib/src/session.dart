@@ -23,6 +23,8 @@ class Session extends ChangeNotifier {
 
   /// The comment typed so far has more than spaces.
   bool get canSend => _draft.trim().isNotEmpty;
+
+  /// The banner on screen: the report sent, followed, or the receiver not listening.
   StatusBanner? banner;
 
   /// The press outlined while the receiver takes its screenshot.
@@ -40,12 +42,14 @@ class Session extends ChangeNotifier {
   Completer<void>? _waited;
   bool _disposed = false;
 
+  /// The composer is open or a report is on its way: a long press opens nothing.
   bool get isBusy => target != null || sending;
 
   void _changed() {
     if (!_disposed) notifyListeners();
   }
 
+  /// Opens the composer for `pressed`.
   void begin(Target pressed) {
     if (isBusy) return;
     _draft = '';
@@ -53,12 +57,14 @@ class Session extends ChangeNotifier {
     _changed();
   }
 
+  /// The comment as typed; redraws only when it starts or stops being sendable.
   void setDraft(String text) {
     final could = canSend;
     _draft = text;
     if (canSend != could) _changed();
   }
 
+  /// Closes the composer without sending.
   void cancel() {
     target = null;
     _changed();

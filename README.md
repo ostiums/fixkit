@@ -228,6 +228,7 @@ Run it with `flutter run` in the iOS simulator, from a terminal, VS Code or Andr
 
 - **Start the agent in the folder with `pubspec.yaml`.** That is how the plugin knows the app is Flutter.
 - **No rebuild.** Saving a file does not hot reload a Flutter app, so the agent asks for it: in Claude Code with the mod's `hot_reload` tool, in Codex with a POST to the receiver's `/reload`. Both go through the VM service `flutter run` serves, the one DevTools' reload button calls. A compile error comes back to the agent; a change hot reload can't apply (`initState`, globals, `main`) gets a hot restart.
+- **In Codex, the POST needs network access**, which Codex's default sandbox blocks, even to `127.0.0.1`: approve the command when Codex asks, or allow it for the session with `codex -c sandbox_workspace_write.network_access=true`.
 - **Release builds** leave FixKit out: `FixKitHost` returns its child unless `kDebugMode`, a constant the compiler folds. On Android and the web it returns its child too.
 
 Reports name the app's widget around the pressed one, the line of its constructor call and where that widget is used:

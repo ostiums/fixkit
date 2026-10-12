@@ -44,7 +44,7 @@ try {
     }
     // Codex has no tool of the mod's: the receiver hot reloads a Flutter app for a request of its own.
     const additionalContext = instructionsFor(projectKind(project), {
-      reload: `run curl -s -X POST http://127.0.0.1:${PORT}/reload, which answers {"ok":true} once the app has reloaded, or {"ok":false} with the reason`,
+      reload: `run curl -s -X POST http://127.0.0.1:${PORT}/reload, which answers {"ok":true} once the app has reloaded, or {"ok":false} with the reason; it needs network access, so when the sandbox blocks it, ask to run it outside the sandbox`,
       restart: `Send -d '{"restart":true}' with it`,
     })
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext } }))
