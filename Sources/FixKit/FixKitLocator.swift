@@ -9,9 +9,10 @@ struct FixMark {
     /// The view expression's type, `ModifiedContent` and all.
     let type: Any.Type
     var frame: CGRect
-    /// Shapes, filled or stroked, colors, gradients and spacers: what backgrounds and overlays are
-    /// drawn with.
+    /// Shapes, filled or stroked, colors and gradients: what backgrounds and overlays are drawn with.
     let isDecoration: Bool
+    /// A spacer, or a modifier's `content`, which stands for the view the modifier is applied to.
+    let isStandIn: Bool
     /// Its place in the order SwiftUI paints the host's views, back to front.
     var order = 0
 
@@ -22,8 +23,11 @@ struct FixMark {
         self.frame = frame
         let view = FixLocator.unwrapped(type)
         isDecoration = view is any Shape.Type || view is any ShapeView.Type || view is any ShapeStyle.Type
-            || view is Spacer.Type
+        isStandIn = view is any FixStandIn.Type
     }
+
+    /// Neither decoration nor a stand-in: a view drawn for its own sake.
+    var isSolid: Bool { !isDecoration && !isStandIn }
 
     var module: Substring { fileID.prefix { $0 != "/" } }
 }
@@ -66,19 +70,30 @@ enum FixLocator {
 
     /// Innermost first: of nested marks the smallest, of equal ones the later painted, which SwiftUI
     /// enumerates after the views around it. Not the last painted alone: a transparent container
-    /// laid over the whole screen would win every press. Decoration only when nothing else is there.
+    /// laid over the whole screen would win every press.
     private static func pressed(among under: [FixMark]) -> FixMark? {
         var candidates = under.sorted(by: isInner)
-        while let candidate = candidates.first(where: { !$0.isDecoration }) ?? candidates.first {
+        while let candidate = candidates.first(where: { !givesWay($0, among: candidates) }) ?? candidates.first {
             // A view painted later that covers only part of the candidate is no view around it but
             // one drawn over it, such as a tab bar over a row scrolled under it.
             let covered = candidates.contains {
-                $0.order > candidate.order && !$0.isDecoration && !holds($0.frame, candidate.frame)
+                $0.order > candidate.order && $0.isSolid && !holds($0.frame, candidate.frame)
             }
             if !covered { return candidate }
             candidates.removeAll { $0.order == candidate.order }
         }
         return nil
+    }
+
+    /// Whether the mark leaves the press to another view under the point. A stand-in always does.
+    /// A shape or a colour does to a view painted over it, and to the view it fills or outlines
+    /// exactly: drawn on its own, a progress bar or a status dot, it is what was pressed.
+    private static func givesWay(_ mark: FixMark, among candidates: [FixMark]) -> Bool {
+        if mark.isStandIn { return true }
+        guard mark.isDecoration else { return false }
+        return candidates.contains {
+            $0.isSolid && ($0.order > mark.order || holds($0.frame, mark.frame) && holds(mark.frame, $0.frame))
+        }
     }
 
     /// The app's own views around the pressed one, the nearest two: types declared in a module whose
@@ -89,7 +104,7 @@ enum FixLocator {
         for mark in under.sorted(by: isInner)
         where components.count < 2 && mark.order < pressed.order && holds(mark.frame, pressed.frame)
             // An app's own shape is still a background.
-            && !mark.isDecoration && modules.contains(module(of: mark.type)) && seen.insert(mark.source).inserted {
+            && mark.isSolid && modules.contains(module(of: mark.type)) && seen.insert(mark.source).inserted {
             components.append(mark)
         }
         return components
@@ -133,9 +148,18 @@ enum FixLocator {
         return type
     }
 
-    /// `TransactionRow` for `TransactionRow`, `HStack` for `HStack<TupleView<…>>`.
+    /// `TransactionRow` for `TransactionRow`, `HStack` for `HStack<TupleView<…>>`, `Capsule` for a
+    /// filled or stroked capsule.
     private static func name(of type: Any.Type) -> String {
-        String(String(describing: unwrapped(type)).prefix { $0 != "<" })
+        var view = unwrapped(type)
+        if let shaped = view as? any ShapeView.Type {
+            view = shape(of: shaped)
+        }
+        return String(String(describing: view).prefix { $0 != "<" })
+    }
+
+    private static func shape<Shaped: ShapeView>(of _: Shaped.Type) -> Any.Type {
+        Shaped.Content.self
     }
 
     /// The module that declares the type, which for `Text` is SwiftUI's.
@@ -143,6 +167,10 @@ enum FixLocator {
         String(reflecting: unwrapped(type)).prefix { $0 != "." }
     }
 }
+
+private protocol FixStandIn {}
+extension Spacer: FixStandIn {}
+extension _ViewModifier_Content: FixStandIn {}
 
 private protocol FixModified {
     static var content: Any.Type { get }
