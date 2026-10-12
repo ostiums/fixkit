@@ -14,6 +14,7 @@ class ReportStatus {
   final String? status;
 }
 
+/// The receiver's HTTP API on 127.0.0.1, one connection per call.
 class Client {
   final _base = Uri.parse('http://127.0.0.1:$_port');
 
@@ -47,6 +48,7 @@ class Client {
     return (receipt as Map)['id'] as String;
   }
 
+  /// Where the report is now.
   Future<ReportStatus> statusOf(String id) async =>
       _status(await _call('GET', '/status?id=${Uri.encodeQueryComponent(id)}', timeout: const Duration(seconds: 3)));
 

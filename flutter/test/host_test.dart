@@ -93,4 +93,37 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await tester.pump(const Duration(seconds: 5));
   }, variant: iOS);
+
+  testWidgets('the app slides up so the composer above the keyboard leaves the pressed element in sight', (tester) async {
+    await tester.pumpWidget(
+      const FixKitHost(child: MaterialApp(home: Scaffold(body: Align(alignment: Alignment.bottomCenter, child: Text('Pay'))))),
+    );
+    await tester.longPress(find.text('Pay'));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 900);
+    addTearDown(tester.view.resetViewInsets);
+    // The composer's light pulses for as long as it is open: the slide is over well within 500 ms.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    // The composer's top: the screen less the keyboard, its gap and its height; the element 28 pt above.
+    final composerTop = tester.view.physicalSize.height / tester.view.devicePixelRatio - 900 / tester.view.devicePixelRatio - 10 - 52;
+    expect(tester.getRect(find.text('Pay')).bottom, moreOrLessEquals(composerTop - 28, epsilon: 0.5));
+  }, variant: iOS);
+
+  testWidgets("a Material button under the long press is not pressed; a tap presses it", (tester) async {
+    var pressed = 0;
+    await tester.pumpWidget(
+      FixKitHost(child: MaterialApp(home: Scaffold(body: Center(child: TextButton(onPressed: () => pressed++, child: const Text('Pay')))))),
+    );
+    await tester.longPress(find.text('Pay'));
+    await tester.pump();
+    expect(find.byType(EditableText), findsOneWidget);
+    expect(pressed, 0);
+
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pump();
+    await tester.tap(find.text('Pay'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(pressed, 1);
+  }, variant: iOS);
 }

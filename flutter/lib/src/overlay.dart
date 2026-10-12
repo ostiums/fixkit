@@ -11,6 +11,8 @@ import 'session.dart';
 const _tint = Color(0xFFD97857);
 const _white = Color(0xFFFFFFFF);
 const _panelHeight = 52.0;
+// Between the composer's panel and the keyboard.
+const _panelGap = 10.0;
 
 /// FixKit's widgets above the app: the outline for a screenshot, the composer, the banner. Idle,
 /// it takes no touch, so the app gets them all.
@@ -41,7 +43,7 @@ class FixKitOverlay extends StatelessWidget {
 /// How far the host slides the app up so the composer, above the keyboard, does not cover the
 /// pressed element.
 double composerLift(Target target, Size screen, double keyboard) =>
-    liftFor(target.element?.frame?.bottom ?? target.touch.dy, screen.height - keyboard - 10 - _panelHeight);
+    liftFor(target.element?.frame?.bottom ?? target.touch.dy, screen.height - keyboard - _panelGap - _panelHeight);
 
 /// The pressed element outlined in red, or a red ring where the finger was.
 class _Outline extends StatelessWidget {
@@ -107,6 +109,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
     final frame = target.element?.frame;
     final lift = composerLift(target, size, keyboard);
     final lit = spotlight(frame, target.touch, lift);
+    void send() => session.send(lifted: lift > 0);
     final name = target.element?.name;
 
     return Semantics(
@@ -152,7 +155,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
           Positioned(
             left: 14,
             right: 14,
-            bottom: keyboard + 10,
+            bottom: keyboard + _panelGap,
             height: _panelHeight,
             // Takes the taps that miss its field and button, which would otherwise cancel.
             child: GestureDetector(
@@ -170,10 +173,10 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
                   children: [
                     const Text('✦', style: TextStyle(color: _tint, fontSize: 16, fontWeight: FontWeight.w600)),
                     const SizedBox(width: 10),
-                    Expanded(child: _field(session, lift)),
+                    Expanded(child: _field(session, send)),
                     const SizedBox(width: 10),
                     GestureDetector(
-                      onTap: session.canSend ? () => session.send(lifted: lift > 0) : null,
+                      onTap: session.canSend ? send : null,
                       child: Container(
                         width: 38,
                         height: 38,
@@ -192,7 +195,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
     );
   }
 
-  Widget _field(Session session, double lift) => Stack(
+  Widget _field(Session session, VoidCallback send) => Stack(
     alignment: Alignment.centerLeft,
     children: [
       ValueListenableBuilder(
@@ -210,7 +213,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
         keyboardAppearance: Brightness.dark,
         textInputAction: TextInputAction.send,
         autocorrect: false,
-        onSubmitted: (_) => session.send(lifted: lift > 0),
+        onSubmitted: (_) => send(),
       ),
     ],
   );

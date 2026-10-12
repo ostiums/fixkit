@@ -75,7 +75,7 @@ When a prompt carries that line:
 }
 
 // How Claude Code hot reloads the app: through the hot_reload tool its mod serves.
-const HOT_RELOAD_TOOL_USE = { reload: 'call the hot_reload tool', restart: 'Pass restart: true' }
+const CLAUDE_CODE_RELOAD = { reload: 'call the hot_reload tool', restart: 'Pass restart: true' }
 
 /**
  * The instructions for a project of `kind`. A Flutter project's say how this harness hot reloads
@@ -83,7 +83,7 @@ const HOT_RELOAD_TOOL_USE = { reload: 'call the hot_reload tool', restart: 'Pass
  * @param {ProjectKind} kind
  * @param {{ reload: string, restart: string }} [flutterReload]
  */
-export function instructionsFor(kind, flutterReload = HOT_RELOAD_TOOL_USE) {
+export function instructionsFor(kind, flutterReload = CLAUDE_CODE_RELOAD) {
   if (kind === 'flutter') return flutterInstructions(flutterReload)
   return kind === 'react-native' ? RN_INSTRUCTIONS : INSTRUCTIONS
 }
