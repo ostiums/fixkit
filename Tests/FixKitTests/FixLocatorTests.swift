@@ -118,3 +118,59 @@ struct FixLocatorTests {
         #expect(FixLocator.element(at: CGPoint(x: 30, y: 900), among: screen, clips: [], fixable: nil) == nil)
     }
 }
+
+#if SourceLocations
+private struct Badge: View {
+    let title: String
+    static let textLine = #line + 3
+    var body: some View {
+        HStack {
+            Text(title).padding(8)
+        }
+    }
+}
+
+private struct Board: View {
+    static let badgeLine = #line + 3
+    var body: some View {
+        VStack(spacing: 0) {
+            Badge(title: "One")
+            Spacer()
+        }
+    }
+}
+
+/// SwiftUI's own marks on a real screen: what a new SDK would break first.
+@MainActor
+struct FixLocatorOnScreenTests {
+    private func window(_ root: UIViewController) async throws -> UIWindow {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        window.rootViewController = root
+        window.isHidden = false
+        window.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(100))
+        return window
+    }
+
+    @Test func aPressNamesTheViewItsComponentAndWhereItIsUsed() async throws {
+        let host = UIHostingController(rootView: Board())
+        // The window's safe area would push the badge down by the status bar's height.
+        host.safeAreaRegions = []
+        let window = try await window(host)
+        // Equal frames: the Badge where Board uses it, its HStack and its padded Text. SwiftUI
+        // enumerates the outer first, so the Text is the pressed view.
+        let element = FixLocator.element(at: CGPoint(x: 200, y: 18), in: window, fixable: nil)
+
+        #expect(element?.name == "Badge › Text")
+        #expect(element?.source == FixSource(file: #filePath, line: Badge.textLine))
+        #expect(element?.usedAt.first == FixSource(file: #filePath, line: Board.badgeLine))
+    }
+
+    @Test func aUIKitScreenHasNoMarks() async throws {
+        let window = try await window(UIViewController())
+
+        #expect(FixLocator.element(at: CGPoint(x: 200, y: 18), in: window, fixable: nil) == nil)
+    }
+}
+#endif
+
