@@ -98,6 +98,11 @@ test('an app that quits during the reload is not running, at once', async () => 
 
 test('an app that accepts the connection and never answers is cut off at the deadline', async () => {
   // A suspended app: the simulator's kernel accepts, nothing replies.
-  const fetchImpl = () => new Promise(() => {})
+  let lookup
+  const fetchImpl = (_url, init) => {
+    lookup = init.signal
+    return new Promise(() => {})
+  }
   await assert.rejects(reload(VM, {}, { fetchImpl, deadline: 50 }), { message: TOO_LONG })
+  assert.equal(lookup.aborted, true)
 })

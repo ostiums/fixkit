@@ -10,10 +10,12 @@ export const FAILED = 'The reload failed, most likely a compile error: run dart 
 export const TOO_LONG = 'The reload took more than a minute: see flutter run'
 
 /** The WebSocket of the app's DDS: the VM service redirects to it once `flutter run` attached. */
-export async function ddsSocketUrl(vmService, fetchImpl = fetch) {
+export async function ddsSocketUrl(vmService, fetchImpl = fetch, signal) {
   const base = vmService.endsWith('/') ? vmService : `${vmService}/`
-  const answer = await fetchImpl(base, { redirect: 'manual' })
+  const answer = await fetchImpl(base, { redirect: 'manual', signal })
   const location = answer.status >= 300 && answer.status < 400 ? answer.headers.get('location') : null
+  // Only the headers matter; an unread body keeps the connection open.
+  await answer.body?.cancel()
   if (!location) return new URL('ws', base).href.replace(/^http/, 'ws')
   const moved = new URL(location, base)
   return (moved.searchParams.get('uri') ?? new URL('ws', moved).href).replace(/^http/, 'ws')
@@ -66,19 +68,17 @@ const opened = socket =>
 
 /** Hot reloads, or with `restart` hot restarts, the app whose VM service is `vmService`. */
 export async function reload(vmService, { restart = false } = {}, { fetchImpl = fetch, WebSocketImpl = WebSocket, wait = 1000, deadline = 60_000 } = {}) {
-  let socket = null
-  let timer
-  let finished = false
   // All of it under the deadline: a suspended app accepts the connection and never answers.
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(new Error(TOO_LONG)), deadline)
+  const timedOut = new Promise((_, reject) => timeout.signal.addEventListener('abort', () => reject(timeout.signal.reason)))
+  let socket = null
   const work = (async () => {
-    let url
-    try {
-      url = await ddsSocketUrl(vmService, fetchImpl)
-    } catch {
+    const url = await ddsSocketUrl(vmService, fetchImpl, timeout.signal).catch(() => {
       throw new Error(NOT_RUNNING)
-    }
+    })
     // The deadline passed while DDS was looked up: nothing is left to open a socket for.
-    if (finished) return
+    timeout.signal.throwIfAborted()
     socket = new WebSocketImpl(url)
     await opened(socket)
     const rpc = rpcOver(socket, restart ? 'hotRestart' : 'reloadSources', wait)
@@ -93,9 +93,8 @@ export async function reload(vmService, { restart = false } = {}, { fetchImpl = 
     if (result?.success === false) throw new Error(FAILED)
   })()
   try {
-    await Promise.race([work, new Promise((_, reject) => (timer = setTimeout(() => reject(new Error(TOO_LONG)), deadline)))])
+    await Promise.race([work, timedOut])
   } finally {
-    finished = true
     clearTimeout(timer)
     socket?.close()
   }
