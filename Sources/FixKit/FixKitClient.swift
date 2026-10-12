@@ -53,6 +53,9 @@ enum FixKitClient {
                 fields["file"] = source.file
                 fields["line"] = source.line
             }
+            if !element.usedAt.isEmpty {
+                fields["usedAt"] = element.usedAt.map { ["file": $0.file, "line": $0.line] }
+            }
             body["element"] = fields
         }
         if let viewDescription = target.viewDescription {

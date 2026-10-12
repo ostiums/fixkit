@@ -185,13 +185,16 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     func report(at point: CGPoint, in window: UIWindow? = nil) {
         guard let window = window ?? FixHost.shared.appWindow else { return }
         let finding = FixInspector.inspect(at: point, in: window)
-        // A UIKit view is found along the view hierarchy; SwiftUI marks have only their frames.
-        let element = finding.element ?? FixRegistry.shared.element(at: point)
+        let fixable = FixRegistry.shared.element(at: point)
+        // Inside SwiftUI each view's mark says where it is written; a UIKit view is found along the
+        // view hierarchy, and without marks a SwiftUI .fixable by its frame.
+        let located = FixLocator.element(at: point, in: window, fixable: fixable)
+        let element = located ?? finding.element ?? fixable
         let named = FixRegistry.shared.screen
         FixSession.shared.begin(
             FixTarget(
                 element: element, touch: point, screen: named.isEmpty ? finding.screen ?? "" : named,
-                viewDescription: finding.viewDescription,
+                viewDescription: located == nil ? finding.viewDescription : nil,
                 screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
     }
 
