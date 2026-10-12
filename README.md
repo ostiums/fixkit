@@ -115,7 +115,7 @@ Every view reports the line its code starts on, the app's view around it and whe
 FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it. Where it falls short:
 
 - **A body with an explicit `return`** is named where it is used, and so is a view from another package.
-- **A view under another in the same SwiftUI hierarchy**, such as a row scrolled under a custom tab bar, can win over it, and `.offset` moves a view without its frame. Accessibility and the screenshot in the report show what was pressed.
+- **A row scrolled entirely under a bar** drawn by the same SwiftUI hierarchy, such as a custom tab bar, can win over the bar where the bar has nothing of its own. Accessibility and the screenshot in the report show what was pressed.
 - **The `MemberImportVisibility` upcoming feature** needs `import FixKit` in every file with views.
 - **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Without it, an unmarked view is named by accessibility and a `.fixable` view by its mark's line.
 
