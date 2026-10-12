@@ -23,7 +23,7 @@ FixKit has two parts:
 
 For a SwiftUI or UIKit app with Claude Code. With Codex as the agent, swap in the steps from [Codex](#codex). For a React Native or Flutter app, see [React Native](#react-native) or [Flutter](#flutter).
 
-**You need:** Claude Code 2.1.287+ or Codex CLI 0.159+, Node.js 18.2+, Xcode and an iOS 17+ simulator. FixKit works in the simulator only.
+**You need:** Claude Code 2.1.287+ or Codex CLI 0.159+, Node.js 18.2+, Xcode 16.3+ and an iOS 17+ simulator. FixKit works in the simulator only.
 
 **Recommended:**
 
