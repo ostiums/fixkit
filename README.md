@@ -112,12 +112,22 @@ Every view reports the line its code starts on, the app's view around it and whe
 - **`.fixable("name")` is optional:** it names the element (`card.holderName › Text`) and lets [scripted recordings](#scripted-recordings) press it. Names may carry data: `.fixable("transaction.amount.\(merchant)")`.
 - **`.fixScreen("Home")`** names the screen. With a `TabView`: `.fixScreen(selectedTab.rawValue)`.
 
-FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it. Where it falls short:
+FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it.
+
+**A builder that must return one concrete type stops compiling in Debug,** because every view in it comes back wrapped:
+
+```
+cannot convert return expression of type 'ModifiedContent<Text, _IdentifiedModifier<FixSourceMark>>' to return type 'Text'
+```
+
+`@ViewBuilder title: () -> Text` or `@ViewBuilder var label: Text` do this. Return `some View` there, drop `@ViewBuilder` where a single view is returned, or turn the feature off (below). A builder whose result must be `Sendable` gets a warning before iOS 26.
+
+Where it falls short:
 
 - **A body with an explicit `return`** is named where it is used, and so is a view from another package.
 - **A row scrolled entirely under a bar** drawn by the same SwiftUI hierarchy, such as a custom tab bar, can win over the bar where the bar has nothing of its own. Accessibility and the screenshot in the report show what was pressed.
 - **The `MemberImportVisibility` upcoming feature** needs `import FixKit` in every file with views.
-- **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Without it, an unmarked view is named by accessibility and a `.fixable` view by its mark's line.
+- **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Without it, an unmarked view is named by accessibility and a `.fixable` view by its mark's line. It relies on SwiftUI's underscored API for Previews, so this is also the way out if an SDK drops it.
 
 ### UIKit
 

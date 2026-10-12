@@ -11,6 +11,11 @@ private struct CardShape: Shape {
     func path(in rect: CGRect) -> Path { Path(rect) }
 }
 
+/// A modifier the app declares: its body builds `content` with its own mark.
+private struct AmountStyle: ViewModifier {
+    func body(content: Content) -> some View { content.bold() }
+}
+
 private struct Screen: View {
     var body: some View { Row() }
 }
@@ -68,9 +73,10 @@ struct FixLocatorTests {
         let onText = FixLocator.element(at: CGPoint(x: 30, y: 115), among: marks, clips: [], fixable: nil)
         #expect(onText?.source == source(21))
 
-        let beside = mark(ModifiedContent<Color, _FrameLayout>.self, 16, CGRect(x: 300, y: 120, width: 10, height: 10))
-        let onCircle = FixLocator.element(at: CGPoint(x: 305, y: 125), among: screen + [beside], clips: [], fixable: nil)
-        #expect(onCircle?.source == source(20))
+        // A colour filling the row behind it, painted after the row's HStack.
+        let fill = mark(Color.self, 16, CGRect(x: 0, y: 100, width: 400, height: 60))
+        let onFill = FixLocator.element(at: CGPoint(x: 300, y: 125), among: screen + [fill], clips: [], fixable: nil)
+        #expect(onFill?.source == source(20))
     }
 
     @Test func onlyDecorationUnderThePointGivesTheInnermost() {
@@ -168,6 +174,32 @@ struct FixLocatorTests {
         #expect(FixLocator.inner(row, container) == row)
         #expect(FixLocator.inner(nil, container) == container)
         #expect(FixLocator.inner(row, nil) == row)
+    }
+
+    @Test func aShapeOfItsOwnCanBePressed() {
+        let bar = mark(ModifiedContent<_ShapeView<Capsule, Color>, _FrameLayout>.self, 22, CGRect(x: 200, y: 140, width: 150, height: 6))
+        let element = FixLocator.element(at: CGPoint(x: 250, y: 142), among: screen + [bar], clips: [], fixable: nil)
+
+        #expect(element?.name == "Row › Capsule")
+        #expect(element?.source == source(22))
+    }
+
+    @Test func aModifiersContentStandsForTheViewItModifies() {
+        let amount = mark(ModifiedContent<Text, AmountStyle>.self, 70, CGRect(x: 300, y: 110, width: 60, height: 20))
+        let styled = mark(
+            ModifiedContent<_ViewModifier_Content<AmountStyle>, _EnvironmentKeyWritingModifier<Font.Weight?>>.self, 3,
+            CGRect(x: 300, y: 110, width: 60, height: 20), fileID: "FixKitTests/AmountStyle.swift")
+        let element = FixLocator.element(at: CGPoint(x: 310, y: 115), among: screen + [amount, styled], clips: [], fixable: nil)
+
+        #expect(element?.source == source(70))
+        #expect(element?.name == "Row › Text")
+    }
+
+    @Test func aSpacerIsNeverPressed() {
+        let spacer = mark(Spacer.self, 23, CGRect(x: 130, y: 100, width: 150, height: 60))
+        let element = FixLocator.element(at: CGPoint(x: 200, y: 130), among: screen + [spacer], clips: [], fixable: nil)
+
+        #expect(element?.source == source(20))
     }
 
     @Test func nothingUnderThePoint() {
