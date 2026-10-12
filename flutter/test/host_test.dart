@@ -1,4 +1,5 @@
 import 'package:fixkit/fixkit.dart';
+import 'package:fixkit/src/host.dart' show runsOnIOS;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -126,4 +127,10 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(pressed, 1);
   }, variant: iOS);
+
+  test('the host runs on iOS and under flutter test, not on a Mac that only looks like iOS', () {
+    expect(runsOnIOS(isIOS: true, environment: const {}), isTrue);
+    expect(runsOnIOS(isIOS: false, environment: const {'FLUTTER_TEST': 'true'}), isTrue);
+    expect(runsOnIOS(isIOS: false, environment: const {}), isFalse);
+  });
 }

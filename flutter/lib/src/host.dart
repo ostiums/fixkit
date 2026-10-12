@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
@@ -7,6 +9,14 @@ import 'session.dart';
 
 // Shorter than the 500 ms of Flutter's own long press, so FixKit's wins the arena first.
 const _pressFor = Duration(milliseconds: 450);
+
+/// Whether the app runs on iOS itself, which in debug means the simulator.
+bool get onIOS => runsOnIOS(isIOS: Platform.isIOS, environment: Platform.environment);
+
+/// iOS, or `flutter test`, which runs on the Mac with the platform overridden: the host's tests run it.
+@visibleForTesting
+bool runsOnIOS({required bool isIOS, required Map<String, String> environment}) =>
+    isIOS || environment.containsKey('FLUTTER_TEST');
 
 /// The debug host: a long press anywhere opens the composer for the app's widget under it.
 class DebugHost extends StatefulWidget {
