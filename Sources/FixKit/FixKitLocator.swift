@@ -18,6 +18,69 @@ struct FixMark {
 /// written, the app's view around it and where that view is used.
 @MainActor
 enum FixLocator {
+    /// The SwiftUI view under the point in the app's window, or nil when no hosting controller draws
+    /// there or the app is built without the SourceLocations trait.
+    static func element(at point: CGPoint, in window: UIWindow, fixable: FixElement?) -> FixElement? {
+        #if SourceLocations
+        guard let host = host(at: point, in: window) else { return nil }
+        return element(
+            at: point, among: marks(of: host, in: window), clips: scrollFrames(in: host.view, window: window),
+            fixable: fixable)
+        #else
+        nil
+        #endif
+    }
+
+    #if SourceLocations
+    /// The hosting controller under the point: the first view controller up from the view the
+    /// window's hit test finds, when it hosts SwiftUI; UIKit content such as a navigation bar has
+    /// none. When the hit test finds nothing, the topmost hosting controller whose view holds the point.
+    private static func host(at point: CGPoint, in window: UIWindow) -> (UIViewController & FixIdentifiedViews)? {
+        if let hit = window.hitTest(point, with: nil), hit !== window {
+            let controller = sequence(first: hit as UIResponder, next: \.next).first { $0 is UIViewController }
+            return controller as? UIViewController & FixIdentifiedViews
+        }
+        guard let root = window.rootViewController else { return nil }
+        let found = controllers(from: root).last {
+            $0 is FixIdentifiedViews && $0.view.window === window && $0.view.isShown
+                && $0.view.frame(in: window).contains(point)
+        }
+        return found as? UIViewController & FixIdentifiedViews
+    }
+
+    /// The controller, its children and what it presents, each before what it holds.
+    private static func controllers(from controller: UIViewController) -> [UIViewController] {
+        var all = [controller]
+        for child in controller.children {
+            all += controllers(from: child)
+        }
+        if let presented = controller.presentedViewController, presented.presentingViewController === controller {
+            all += controllers(from: presented)
+        }
+        return all
+    }
+
+    /// The host's marks with their frames in the window, in the order SwiftUI paints them.
+    private static func marks(of host: UIViewController & FixIdentifiedViews, in window: UIWindow) -> [FixMark] {
+        var marks: [FixMark] = []
+        host._forEachIdentifiedView { proxy in
+            guard let mark = proxy.identifier.base as? FixSourceMark else { return }
+            marks.append(
+                FixMark(
+                    fileID: mark.fileID, source: FixSource(file: mark.file, line: mark.line), type: mark.type,
+                    frame: host.view.convert(proxy.boundingRect, to: window)))
+        }
+        return marks
+    }
+
+    /// The visible region of every scroll view shown inside the view, in the window.
+    private static func scrollFrames(in view: UIView, window: UIWindow) -> [CGRect] {
+        guard view.isVisible else { return [] }
+        let own = view is UIScrollView ? [view.frame(in: window)] : []
+        return own + view.subviews.flatMap { scrollFrames(in: $0, window: window) }
+    }
+    #endif
+
     /// The view under the point: the innermost mark there that is not decoration, named after the
     /// `.fixable` element or the app's own view around it. `marks` come in the order SwiftUI paints
     /// them; `clips` are the frames of the scroll views on screen.
@@ -92,6 +155,16 @@ enum FixLocator {
         String(reflecting: unwrapped(type)).prefix { $0 != "." }
     }
 }
+
+#if SourceLocations
+/// What Xcode Previews' selection reads: every UIHostingController has it, whatever its root view.
+@MainActor
+private protocol FixIdentifiedViews {
+    func _forEachIdentifiedView(body: (_IdentifiedViewProxy) -> Void)
+}
+
+extension UIHostingController: FixIdentifiedViews {}
+#endif
 
 private protocol FixModified {
     static var content: Any.Type { get }
