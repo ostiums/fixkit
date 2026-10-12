@@ -1,0 +1,120 @@
+import SwiftUI
+import Testing
+@testable import FixKit
+
+private struct Row: View {
+    var body: some View { Text("Coffee") }
+}
+
+private struct Screen: View {
+    var body: some View { Row() }
+}
+
+@MainActor
+struct FixLocatorTests {
+    private func mark(_ type: Any.Type, _ line: Int, _ frame: CGRect, fileID: String = "FixKitTests/Screen.swift") -> FixMark {
+        FixMark(fileID: fileID, source: FixSource(file: "/App/\(fileID)", line: line), type: type, frame: frame)
+    }
+
+    private func source(_ line: Int) -> FixSource {
+        FixSource(file: "/App/FixKitTests/Screen.swift", line: line)
+    }
+
+    /// A screen with one row, in the order SwiftUI paints them: each view before the views inside it.
+    private var screen: [FixMark] {
+        [
+            mark(Screen.self, 1, CGRect(x: 0, y: 0, width: 400, height: 800)),
+            mark(VStack<Row>.self, 10, CGRect(x: 0, y: 0, width: 400, height: 800)),
+            mark(ModifiedContent<Row, _PaddingLayout>.self, 12, CGRect(x: 0, y: 100, width: 400, height: 60)),
+            mark(HStack<Text>.self, 20, CGRect(x: 0, y: 100, width: 400, height: 60)),
+            mark(Text.self, 21, CGRect(x: 20, y: 110, width: 100, height: 20)),
+        ]
+    }
+
+    @Test func theInnermostViewNamesItsComponentAndWhereItIsUsed() {
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen, clips: [], fixable: nil)
+
+        #expect(element?.name == "Row › Text")
+        #expect(element?.source == source(21))
+        #expect(element?.usedAt == [source(12), source(1)])
+        #expect(element?.frame == CGRect(x: 20, y: 110, width: 100, height: 20))
+    }
+
+    @Test func ofEqualFramesTheLaterPaintedIsInner() {
+        let element = FixLocator.element(at: CGPoint(x: 300, y: 130), among: screen, clips: [], fixable: nil)
+
+        #expect(element?.name == "Row › HStack")
+        #expect(element?.source == source(20))
+        #expect(element?.usedAt.first == source(12))
+    }
+
+    @Test func aTransparentContainerDrawnOverTheContentDoesNotWin() {
+        let overlay = mark(VStack<Spacer>.self, 30, CGRect(x: 0, y: 0, width: 400, height: 800))
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen + [overlay], clips: [], fixable: nil)
+
+        #expect(element?.source == source(21))
+    }
+
+    @Test func decorationGivesWayToTheContent() {
+        let circle = mark(_ShapeView<Circle, Color>.self, 15, CGRect(x: 25, y: 112, width: 10, height: 10))
+        var marks = screen
+        marks.insert(circle, at: 3)
+
+        let onText = FixLocator.element(at: CGPoint(x: 30, y: 115), among: marks, clips: [], fixable: nil)
+        #expect(onText?.source == source(21))
+
+        let beside = mark(ModifiedContent<Color, _FrameLayout>.self, 16, CGRect(x: 300, y: 120, width: 10, height: 10))
+        let onCircle = FixLocator.element(at: CGPoint(x: 305, y: 125), among: screen + [beside], clips: [], fixable: nil)
+        #expect(onCircle?.source == source(20))
+    }
+
+    @Test func onlyDecorationUnderThePointGivesTheInnermost() {
+        let circle = mark(Circle.self, 15, CGRect(x: 0, y: 0, width: 50, height: 50))
+        let element = FixLocator.element(at: CGPoint(x: 10, y: 10), among: [circle], clips: [], fixable: nil)
+
+        #expect(element?.name == "Circle")
+    }
+
+    @Test func contentScrolledPastTheScrollViewsEdgeIsNotUnderTheBar() {
+        let row = mark(HStack<Text>.self, 20, CGRect(x: 0, y: 680, width: 400, height: 60))
+        let bar = mark(HStack<Text>.self, 40, CGRect(x: 0, y: 700, width: 400, height: 100))
+        let element = FixLocator.element(
+            at: CGPoint(x: 30, y: 720), among: [row, bar], clips: [CGRect(x: 0, y: 0, width: 400, height: 700)], fixable: nil)
+
+        #expect(element?.source == source(40))
+    }
+
+    @Test func aFrameIsCutOnlyWhereItCrossesAScrollView() {
+        let scroll = CGRect(x: 0, y: 0, width: 400, height: 700)
+
+        #expect(FixLocator.clipped(CGRect(x: 0, y: 0, width: 400, height: 800), to: [scroll]) == CGRect(x: 0, y: 0, width: 400, height: 800))
+        #expect(FixLocator.clipped(CGRect(x: 0, y: 720, width: 400, height: 60), to: [scroll]) == CGRect(x: 0, y: 720, width: 400, height: 60))
+        #expect(FixLocator.clipped(CGRect(x: 0, y: 680, width: 400, height: 60), to: [scroll]) == CGRect(x: 0, y: 680, width: 400, height: 20))
+    }
+
+    @Test func fixKitsOwnViewsAreNeverChosen() {
+        let own = mark(Text.self, 5, CGRect(x: 25, y: 112, width: 5, height: 5), fileID: "FixKit/FixKit.swift")
+        let element = FixLocator.element(at: CGPoint(x: 27, y: 114), among: screen + [own], clips: [], fixable: nil)
+
+        #expect(element?.source == source(21))
+    }
+
+    @Test func aFixableAroundTheComponentLendsItsName() {
+        let fixable = FixElement(name: "row.coffee", source: nil, frame: CGRect(x: 0, y: 100, width: 400, height: 60))
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen, clips: [], fixable: fixable)
+
+        #expect(element?.name == "row.coffee › Text")
+        #expect(element?.source == source(21))
+    }
+
+    @Test func aFixableOutsideTheNearestComponentDoesNot() {
+        let fixable = FixElement(name: "screen", source: nil, frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        let element = FixLocator.element(at: CGPoint(x: 30, y: 115), among: screen, clips: [], fixable: fixable)
+
+        #expect(element?.name == "Row › Text")
+    }
+
+    @Test func nothingUnderThePoint() {
+        #expect(FixLocator.element(at: CGPoint(x: 30, y: 900), among: screen, clips: [], fixable: nil) == nil)
+    }
+}
