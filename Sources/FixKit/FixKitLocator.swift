@@ -51,16 +51,10 @@ enum FixLocator {
     /// them, each view right before the views inside it; `clips` are the frames of the scroll views
     /// on screen.
     static func element(at point: CGPoint, among marks: [FixMark], clips: [CGRect]) -> FixElement? {
-        // FixKit's own views are left out; a .fixable's mark stays, to name the view around it.
-        let marks = marks.filter { $0.module != "FixKit" || $0.fixable != nil }.enumerated().map { order, mark in
-            var mark = mark
-            mark.order = order
-            return mark
-        }
-        let parents = parents(of: marks)
+        let (marks, parents, fixables) = tree(of: marks)
         // Clipping only shrinks a frame, so marks away from the point are left out before it.
         let under = marks.compactMap { mark -> FixMark? in
-            guard mark.fixable == nil, mark.frame.contains(point) else { return nil }
+            guard mark.frame.contains(point) else { return nil }
             var mark = mark
             mark.frame = clipped(mark.frame, to: clips)
             return mark.frame.contains(point) ? mark : nil
@@ -70,14 +64,7 @@ enum FixLocator {
         // their frames. An offset moves a view out of the one around it, a header pinned over a row
         // is still no part of it.
         let around = sequence(first: pressed.order) { parents[$0] }.map { marks[$0] }
-        let modules = Set(marks.lazy.filter { $0.fixable == nil }.map(\.module))
-        let components = components(among: around, modules: modules)
-        var fixables: [Int: String] = [:]
-        for mark in marks {
-            if let name = mark.fixable, let parent = parents[mark.order] {
-                fixables[parent] = name
-            }
-        }
+        let components = components(among: around, modules: Set(marks.map(\.module)))
         return FixElement(
             name: name(of: pressed, around: around, component: components.first, fixables: fixables),
             source: pressed.source, frame: pressed.frame, usedAt: components.map(\.source))
@@ -119,19 +106,30 @@ enum FixLocator {
         }
     }
 
-    /// Each mark's parent, by its order: the nearest mark before it that is less deep. A view whose
-    /// own mark is missing leaves its views to the one around it. A .fixable's mark holds no view.
-    private static func parents(of marks: [FixMark]) -> [Int?] {
+    /// The app's marks, numbered in the order SwiftUI paints them; each one's parent, by its order: the
+    /// nearest mark before it that is less deep, so a view whose own mark is missing leaves its views
+    /// to the one around it; and the .fixable names, by the order of the view each is on. FixKit's
+    /// own views are left out.
+    private static func tree(of input: [FixMark]) -> (marks: [FixMark], parents: [Int?], fixables: [Int: String]) {
+        var marks: [FixMark] = []
+        var parents: [Int?] = []
+        var fixables: [Int: String] = [:]
         var open: [FixMark] = []
-        return marks.map { mark in
+        for var mark in input {
             while let last = open.last, last.depth >= mark.depth {
                 open.removeLast()
             }
-            defer {
-                if mark.fixable == nil { open.append(mark) }
+            if let name = mark.fixable {
+                if let view = open.last { fixables[view.order] = name }
+                continue
             }
-            return open.last?.order
+            guard mark.module != "FixKit" else { continue }
+            mark.order = marks.count
+            parents.append(open.last?.order)
+            open.append(mark)
+            marks.append(mark)
         }
+        return (marks, parents, fixables)
     }
 
     /// The app's own views around the pressed one, the nearest two: types declared in a module whose
@@ -150,7 +148,7 @@ enum FixLocator {
     /// `Component › Type`. A .fixable on the pressed view, the component or a view between them names
     /// it instead, the nearest one; on a view beside it or around the component it names another view.
     private static func name(of pressed: FixMark, around: [FixMark], component: FixMark?, fixables: [Int: String]) -> String {
-        var owner = component.map { name(of: $0.type) }
+        var owner = component.map { typeName($0.type) }
         for mark in around {
             if let fixable = fixables[mark.order] {
                 owner = fixable
@@ -158,7 +156,7 @@ enum FixLocator {
             }
             if mark.order == component?.order { break }
         }
-        let type = name(of: pressed.type)
+        let type = typeName(pressed.type)
         return owner.map { "\($0) › \(type)" } ?? type
     }
 
@@ -190,7 +188,7 @@ enum FixLocator {
 
     /// `TransactionRow` for `TransactionRow`, `HStack` for `HStack<TupleView<…>>`, `Capsule` for a
     /// filled or stroked capsule.
-    private static func name(of type: Any.Type) -> String {
+    private static func typeName(_ type: Any.Type) -> String {
         var view = unwrapped(type)
         if let shaped = view as? any ShapeView.Type {
             view = shape(of: shaped)

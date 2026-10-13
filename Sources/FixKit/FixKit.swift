@@ -113,6 +113,11 @@ extension UIView {
         sequence(first: self, next: \.superview)
     }
 
+    /// The views inside it, each before the views inside that one.
+    var descendants: [UIView] {
+        subviews.flatMap { [$0] + $0.descendants }
+    }
+
     /// The view itself is neither hidden nor fully transparent.
     var isVisible: Bool {
         !isHidden && alpha > 0.01

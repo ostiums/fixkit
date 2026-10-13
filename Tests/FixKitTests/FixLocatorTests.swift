@@ -394,12 +394,12 @@ private struct Navigator: View {
 @MainActor
 @Suite(.serialized)
 struct FixLocatorOnScreenTests {
-    private func window(_ root: UIViewController) async throws -> UIWindow {
+    private func window(_ root: UIViewController, wait: Duration = .milliseconds(100)) async throws -> UIWindow {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         window.rootViewController = root
         window.isHidden = false
         window.layoutIfNeeded()
-        try await Task.sleep(for: .milliseconds(100))
+        try await Task.sleep(for: wait)
         return window
     }
 
@@ -410,14 +410,7 @@ struct FixLocatorOnScreenTests {
     ) async throws -> UIWindow {
         let host = UIHostingController(rootView: content())
         host.safeAreaRegions = []
-        let window = try await window(host)
-        try await Task.sleep(for: wait)
-        return window
-    }
-
-    /// A press as the host makes it.
-    private func press(_ point: CGPoint, in window: UIWindow) -> FixElement? {
-        FixLocator.element(at: point, in: window)
+        return try await window(host, wait: wait)
     }
 
     /// The frame of a .fixable on screen.
@@ -426,10 +419,7 @@ struct FixLocatorOnScreenTests {
     }
 
     @Test func aPressNamesTheViewItsComponentAndWhereItIsUsed() async throws {
-        let host = UIHostingController(rootView: Board())
-        // The window's safe area would push the badge down by the status bar's height.
-        host.safeAreaRegions = []
-        let window = try await window(host)
+        let window = try await window { Board() }
         // Equal frames: the Badge where Board uses it, its HStack and its padded Text. SwiftUI
         // enumerates the outer first, so the Text is the pressed view.
         let element = FixLocator.element(at: CGPoint(x: 200, y: 18), in: window)
@@ -448,7 +438,7 @@ struct FixLocatorOnScreenTests {
     @Test func aFixableMovedByAnOffsetStillNamesTheView() async throws {
         let window = try await window { Actions() }
         let button = try frame(of: "send")
-        let element = press(CGPoint(x: button.minX + 30, y: button.minY + 30), in: window)
+        let element = FixLocator.element(at: CGPoint(x: button.minX + 30, y: button.minY + 30), in: window)
 
         #expect(element?.name == "send › Image")
         #expect(element?.usedAt.first == FixSource(file: #filePath, line: Actions.buttonLine))
@@ -457,7 +447,7 @@ struct FixLocatorOnScreenTests {
     @Test func aViewMovedOverAnotherIsUsedWhereItIsWritten() async throws {
         let window = try await window { Shelf() }
         let tag = try frame(of: "tag")
-        let element = press(CGPoint(x: tag.midX, y: tag.midY), in: window)
+        let element = FixLocator.element(at: CGPoint(x: tag.midX, y: tag.midY), in: window)
 
         #expect(element?.name == "tag › Text")
         #expect(element?.usedAt.first == FixSource(file: #filePath, line: Shelf.tagLine))
@@ -470,7 +460,7 @@ struct FixLocatorOnScreenTests {
         scroll.setContentOffset(CGPoint(x: 0, y: 110), animated: false)
         window.layoutIfNeeded()
         try await Task.sleep(for: .milliseconds(200))
-        let element = press(CGPoint(x: 20, y: 90), in: window)
+        let element = FixLocator.element(at: CGPoint(x: 20, y: 90), in: window)
 
         #expect(element?.name == "LedgerHeader › Text")
         #expect(element?.usedAt.first == FixSource(file: #filePath, line: Ledger.headerLine))
@@ -480,7 +470,7 @@ struct FixLocatorOnScreenTests {
     @Test func aFixableOnALayerBehindThePressedViewDoesNotNameIt() async throws {
         let window = try await window { Plate() }
         let plate = try frame(of: "plate.background")
-        let element = press(CGPoint(x: plate.midX, y: plate.midY), in: window)
+        let element = FixLocator.element(at: CGPoint(x: plate.midX, y: plate.midY), in: window)
 
         #expect(element?.name == "Plate › Text")
     }
@@ -488,7 +478,7 @@ struct FixLocatorOnScreenTests {
     @Test func aFixableOnThePressedViewNamesIt() async throws {
         let window = try await window { Totals() }
         let title = try frame(of: "total.title")
-        let element = press(CGPoint(x: title.midX, y: title.midY), in: window)
+        let element = FixLocator.element(at: CGPoint(x: title.midX, y: title.midY), in: window)
 
         #expect(element?.name == "total.title › Text")
     }
@@ -497,7 +487,7 @@ struct FixLocatorOnScreenTests {
         let window = try await window { Totals() }
         let title = try frame(of: "total.title")
         // The amount, right under the title.
-        let element = press(CGPoint(x: title.midX, y: title.maxY + 12), in: window)
+        let element = FixLocator.element(at: CGPoint(x: title.midX, y: title.maxY + 12), in: window)
 
         #expect(element?.name == "Total › Text")
     }
@@ -505,15 +495,11 @@ struct FixLocatorOnScreenTests {
     @Test func aViewOnAPushedScreenNamesWhereItIsUsed() async throws {
         let window = try await window(wait: .seconds(1)) { Navigator() }
         let title = try frame(of: "detail.title")
-        let element = press(CGPoint(x: title.midX, y: title.midY), in: window)
+        let element = FixLocator.element(at: CGPoint(x: title.midX, y: title.midY), in: window)
 
         #expect(element?.name == "detail.title › Text")
         #expect(element?.usedAt.first == FixSource(file: #filePath, line: Navigator.detailLine))
     }
-}
-
-private extension UIView {
-    var descendants: [UIView] { subviews + subviews.flatMap(\.descendants) }
 }
 #endif
 
