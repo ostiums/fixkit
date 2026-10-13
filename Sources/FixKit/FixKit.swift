@@ -146,6 +146,7 @@ private struct FixableModifier: ViewModifier {
                     id, FixElement(name: name, source: FixSource(file: file, line: line), frame: frame))
             }
             .onDisappear { FixRegistry.shared.remove(id) }
+            .fixableMark(name)
     }
 }
 #endif

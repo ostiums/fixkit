@@ -13,17 +13,27 @@ struct FixMark {
     let isDecoration: Bool
     /// A spacer, or a modifier's `content`, which stands for the view the modifier is applied to.
     let isStandIn: Bool
+    /// How many marked views hold it.
+    let depth: Int
+    /// A `.fixable`'s name: the mark stands for it, inside the view it names, and for no view.
+    private(set) var fixable: String?
     /// Its place in the order SwiftUI paints the host's views, back to front.
     var order = 0
 
-    init(fileID: String, source: FixSource, type: Any.Type, frame: CGRect) {
+    init(fileID: String, source: FixSource, type: Any.Type, frame: CGRect, depth: Int) {
         self.fileID = fileID
         self.source = source
         self.type = type
         self.frame = frame
+        self.depth = depth
         let view = FixLocator.unwrapped(type)
         isDecoration = view is any Shape.Type || view is any ShapeView.Type || view is any ShapeStyle.Type
         isStandIn = view is any FixStandIn.Type
+    }
+
+    init(fixable name: String, frame: CGRect, depth: Int) {
+        self.init(fileID: "FixKit/FixKit.swift", source: FixSource(file: "", line: 0), type: EmptyView.self, frame: frame, depth: depth)
+        fixable = name
     }
 
     /// Neither decoration nor a stand-in: a view drawn for its own sake.
@@ -38,26 +48,39 @@ struct FixMark {
 enum FixLocator {
     /// The view under the point: the innermost mark there that is not decoration, named after the
     /// `.fixable` element or the app's own view around it. `marks` come in the order SwiftUI paints
-    /// them; `clips` are the frames of the scroll views on screen.
-    static func element(at point: CGPoint, among marks: [FixMark], clips: [CGRect], fixable: FixElement?) -> FixElement? {
-        let marks = marks.enumerated().compactMap { order, mark -> FixMark? in
-            guard mark.module != "FixKit" else { return nil }
+    /// them, each view right before the views inside it; `clips` are the frames of the scroll views
+    /// on screen.
+    static func element(at point: CGPoint, among marks: [FixMark], clips: [CGRect]) -> FixElement? {
+        // FixKit's own views are left out; a .fixable's mark stays, to name the view around it.
+        let marks = marks.filter { $0.module != "FixKit" || $0.fixable != nil }.enumerated().map { order, mark in
             var mark = mark
             mark.order = order
             return mark
         }
+        let parents = parents(of: marks)
         // Clipping only shrinks a frame, so marks away from the point are left out before it.
         let under = marks.compactMap { mark -> FixMark? in
-            guard mark.frame.contains(point) else { return nil }
+            guard mark.fixable == nil, mark.frame.contains(point) else { return nil }
             var mark = mark
             mark.frame = clipped(mark.frame, to: clips)
             return mark.frame.contains(point) ? mark : nil
         }
         guard let pressed = pressed(among: under) else { return nil }
-        let components = components(around: pressed, among: under, modules: Set(marks.map(\.module)))
+        // The pressed view and the views around it, nearest first: where they are written, whatever
+        // their frames. An offset moves a view out of the one around it, a header pinned over a row
+        // is still no part of it.
+        let around = sequence(first: pressed.order) { parents[$0] }.map { marks[$0] }
+        let modules = Set(marks.lazy.filter { $0.fixable == nil }.map(\.module))
+        let components = components(among: around, modules: modules)
+        var fixables: [Int: String] = [:]
+        for mark in marks {
+            if let name = mark.fixable, let parent = parents[mark.order] {
+                fixables[parent] = name
+            }
+        }
         return FixElement(
-            name: name(of: pressed, in: components.first, fixable: fixable), source: pressed.source,
-            frame: pressed.frame, usedAt: components.map(\.source))
+            name: name(of: pressed, around: around, component: components.first, fixables: fixables),
+            source: pressed.source, frame: pressed.frame, usedAt: components.map(\.source))
     }
 
     /// Of the SwiftUI view and the UIKit view found under a press, the inner one: a UIKit view inside
@@ -96,27 +119,44 @@ enum FixLocator {
         }
     }
 
+    /// Each mark's parent, by its order: the nearest mark before it that is less deep. A view whose
+    /// own mark is missing leaves its views to the one around it. A .fixable's mark holds no view.
+    private static func parents(of marks: [FixMark]) -> [Int?] {
+        var open: [FixMark] = []
+        return marks.map { mark in
+            while let last = open.last, last.depth >= mark.depth {
+                open.removeLast()
+            }
+            defer {
+                if mark.fixable == nil { open.append(mark) }
+            }
+            return open.last?.order
+        }
+    }
+
     /// The app's own views around the pressed one, the nearest two: types declared in a module whose
-    /// code carries marks. Views around it are painted before it and hold it.
-    private static func components(around pressed: FixMark, among under: [FixMark], modules: Set<Substring>) -> [FixMark] {
-        var seen: Set<FixSource> = [pressed.source]
+    /// code carries marks.
+    private static func components(among around: [FixMark], modules: Set<Substring>) -> [FixMark] {
+        var seen: Set<FixSource> = [around[0].source]
         var components: [FixMark] = []
-        for mark in under.sorted(by: isInner)
-        where components.count < 2 && mark.order < pressed.order && holds(mark.frame, pressed.frame)
-            // An app's own shape is still a background.
-            && mark.isSolid && modules.contains(module(of: mark.type)) && seen.insert(mark.source).inserted {
+        for mark in around.dropFirst()
+        // An app's own shape is still a background.
+        where components.count < 2 && mark.isSolid && modules.contains(module(of: mark.type)) && seen.insert(mark.source).inserted {
             components.append(mark)
         }
         return components
     }
 
-    /// `Component › Type`. A .fixable name stands for the component when it marks the pressed view,
-    /// the component or a view between them.
-    private static func name(of pressed: FixMark, in component: FixMark?, fixable: FixElement?) -> String {
-        let owner = if let fixable, holds(fixable.frame, pressed.frame), component.map({ holds($0.frame, fixable.frame) }) ?? true {
-            fixable.name
-        } else {
-            component.map { name(of: $0.type) }
+    /// `Component › Type`. A .fixable on the pressed view, the component or a view between them names
+    /// it instead, the nearest one; on a view beside it or around the component it names another view.
+    private static func name(of pressed: FixMark, around: [FixMark], component: FixMark?, fixables: [Int: String]) -> String {
+        var owner = component.map { name(of: $0.type) }
+        for mark in around {
+            if let fixable = fixables[mark.order] {
+                owner = fixable
+                break
+            }
+            if mark.order == component?.order { break }
         }
         let type = name(of: pressed.type)
         return owner.map { "\($0) › \(type)" } ?? type
