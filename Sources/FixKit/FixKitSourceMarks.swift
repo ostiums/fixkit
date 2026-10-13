@@ -69,6 +69,7 @@ private struct FixableMarkModifier: ViewModifier {
     @Environment(\.fixDepth) private var depth
 
     func body(content: Content) -> some View {
+        // An explicit return, as in FixMarkModifier: a mark of the body's own would hold the name's.
         return content.modifier(_IdentifiedModifier(identifier: FixableMark(name: name, depth: depth)))
     }
 }

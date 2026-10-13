@@ -189,11 +189,13 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
         // view hierarchy, and of the two the inner one wins; without either, a SwiftUI .fixable by its frame.
         let located = FixLocator.element(at: point, in: window)
         let element = FixLocator.inner(located, finding.element) ?? FixRegistry.shared.element(at: point)
+        // The marks name the view and its line, so accessibility's description of a view is left out.
+        let markedViewWon = located != nil && element == located
         let named = FixRegistry.shared.screen
         FixSession.shared.begin(
             FixTarget(
                 element: element, touch: point, screen: named.isEmpty ? finding.screen ?? "" : named,
-                viewDescription: located != nil && element == located ? nil : finding.viewDescription,
+                viewDescription: markedViewWon ? nil : finding.viewDescription,
                 screenshot: screenshot(of: window, marking: element?.frame, touch: point)))
     }
 
