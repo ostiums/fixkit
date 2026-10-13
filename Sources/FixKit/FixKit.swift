@@ -61,7 +61,7 @@ final class FixRegistry {
     static let shared = FixRegistry()
 
     var screen = ""
-    private var elements: [UUID: FixElement] = [:]
+    private(set) var elements: [UUID: FixElement] = [:]
     private var marks: [ObjectIdentifier: ViewMark] = [:]
 
     func update(_ id: UUID, _ element: FixElement) {
