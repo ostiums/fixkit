@@ -109,7 +109,8 @@ Every view reports the line its code starts on, the app's view around it and whe
 
 - **The innermost view wins:** a press on a row's amount names the amount's `Text`, a press between the row's labels names its `HStack`.
 - **Backgrounds and overlays step aside:** shapes, colours and spacers lose to the content they sit behind or around.
-- **`.fixable("name")` is optional:** it names the element (`card.holderName › Text`) and lets [scripted recordings](#scripted-recordings) press it. Names may carry data: `.fixable("transaction.amount.\(merchant)")`.
+- **`.fixable("name")` is optional:** it names the element (`card.holderName › Text`) and lets [scripted recordings](#scripted-recordings) press it. Names may carry data: `.fixable("transaction.amount.\(merchant)")`. The name goes to the view it is on and the views written inside it, up to the nearest view of the app's own: a `.fixable` on a `.background` or a `ZStack` layer names that layer, not the text over it.
+- **Where the code is, not where the view is drawn:** "used at" follows the code, so a view moved by `.offset` or a header pinned over a row is reported where it is written.
 - **`.fixScreen("Home")`** names the screen. With a `TabView`: `.fixScreen(selectedTab.rawValue)`.
 
 FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it.
@@ -117,7 +118,7 @@ FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes
 **A builder that must return one concrete type stops compiling in Debug,** because every view in it comes back wrapped:
 
 ```
-cannot convert return expression of type 'ModifiedContent<Text, _IdentifiedModifier<FixSourceMark>>' to return type 'Text'
+cannot convert return expression of type 'ModifiedContent<Text, FixMarkModifier>' to return type 'Text'
 ```
 
 `@ViewBuilder title: () -> Text` or `@ViewBuilder var label: Text` do this. Return `some View` there, drop `@ViewBuilder` where a single view is returned, or turn the feature off (below). A builder whose result must be `Sendable` gets a warning before iOS 26.
