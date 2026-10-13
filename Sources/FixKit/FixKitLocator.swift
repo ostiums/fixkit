@@ -108,23 +108,28 @@ enum FixLocator {
 
     /// The app's marks, numbered in the order SwiftUI paints them; each one's parent, by its order: the
     /// nearest mark before it that is less deep, so a view whose own mark is missing leaves its views
-    /// to the one around it; and the .fixable names, by the order of the view each is on. FixKit's
-    /// own views are left out.
+    /// to the one around it; and the .fixable names, by the order of the view each is on. A view with
+    /// no mark of its own, a hosting controller's root view say, lends its name to the first view
+    /// inside it. FixKit's own views are left out.
     private static func tree(of input: [FixMark]) -> (marks: [FixMark], parents: [Int?], fixables: [Int: String]) {
         var marks: [FixMark] = []
         var parents: [Int?] = []
         var fixables: [Int: String] = [:]
         var open: [FixMark] = []
+        var unplaced: FixMark?
         for var mark in input {
             while let last = open.last, last.depth >= mark.depth {
                 open.removeLast()
             }
             if let name = mark.fixable {
-                if let view = open.last { fixables[view.order] = name }
+                if let view = open.last { fixables[view.order] = name } else { unplaced = mark }
                 continue
             }
             guard mark.module != "FixKit" else { continue }
             mark.order = marks.count
+            if let fixable = unplaced.take(), mark.depth >= fixable.depth {
+                fixables[mark.order] = fixable.fixable
+            }
             parents.append(open.last?.order)
             open.append(mark)
             marks.append(mark)

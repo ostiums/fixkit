@@ -371,6 +371,13 @@ private struct Totals: View {
     }
 }
 
+/// A screen given to a hosting controller as is, not through a view builder: its own view has no mark.
+private struct Plain: View {
+    var body: some View {
+        VStack { Text("Plain") }.frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// SwiftUI hands its environment, and so the marks' depth, on to a pushed screen's own hosting controller.
 private struct Detail: View {
     var body: some View {
@@ -395,6 +402,10 @@ private struct Navigator: View {
 @Suite(.serialized)
 struct FixLocatorOnScreenTests {
     private func window(_ root: UIViewController, wait: Duration = .milliseconds(100)) async throws -> UIWindow {
+        // An earlier test's window goes away without its views disappearing: its .fixable entries stay.
+        for id in FixRegistry.shared.elements.keys {
+            FixRegistry.shared.remove(id)
+        }
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
         window.rootViewController = root
         window.isHidden = false
@@ -490,6 +501,16 @@ struct FixLocatorOnScreenTests {
         let element = FixLocator.element(at: CGPoint(x: title.midX, y: title.maxY + 12), in: window)
 
         #expect(element?.name == "Total › Text")
+    }
+
+    /// So is a `NavigationLink`'s destination: the .fixable still names what is inside.
+    @Test func aFixableOnAHostingControllersRootViewNamesItsViews() async throws {
+        let host = UIHostingController(rootView: Plain().fixable("plain.root"))
+        host.safeAreaRegions = []
+        let window = try await window(host)
+        let element = FixLocator.element(at: CGPoint(x: 200, y: 400), in: window)
+
+        #expect(element?.name == "plain.root › Text")
     }
 
     @Test func aViewOnAPushedScreenNamesWhereItIsUsed() async throws {
