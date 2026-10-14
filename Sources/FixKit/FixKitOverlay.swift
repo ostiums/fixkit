@@ -69,9 +69,10 @@ struct FixComposerOverlay: View {
                     .position(x: frame.midX, y: frame.midY)
 
                 if let title {
+                    // A title wider than the screen gives up its start: the file and line stay readable.
                     label(title)
-                        .fixedSize()
                         .onGeometryChange(for: CGFloat.self, of: \.size.width) { labelWidth = $0 }
+                        .frame(maxWidth: proxy.size.width - 24)
                         .position(
                             x: min(max(frame.midX, labelWidth / 2 + 12), proxy.size.width - labelWidth / 2 - 12),
                             y: frame.minY > 120 ? frame.minY - 22 : frame.maxY + 22)
@@ -91,6 +92,8 @@ struct FixComposerOverlay: View {
 
     private func label(_ title: String) -> some View {
         Text(title)
+            .lineLimit(1)
+            .truncationMode(.head)
             .font(.system(size: 11, weight: .semibold, design: .monospaced))
             .foregroundStyle(.white)
             .padding(.horizontal, 10)
