@@ -72,7 +72,7 @@ struct FixComposerOverlay: View {
                     let margin: CGFloat = 12
                     label(title)
                         .onGeometryChange(for: CGFloat.self, of: \.size.width) { labelWidth = $0 }
-                        .frame(maxWidth: proxy.size.width - 2 * margin)
+                        .frame(maxWidth: max(0, proxy.size.width - 2 * margin))
                         .position(
                             x: min(max(frame.midX, labelWidth / 2 + margin), proxy.size.width - labelWidth / 2 - margin),
                             y: frame.minY > 120 ? frame.minY - 22 : frame.maxY + 22)

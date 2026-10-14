@@ -261,7 +261,7 @@ app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──A
       └────────── statuses ◀── Claude Code mod  or  Codex hooks
 ```
 
-- **Long press** (0.5 s) runs alongside the app's gestures, so buttons and scroll views keep working. It also wins over a view's `.contextMenu`: the menu is cancelled before it opens.
+- **Long press** (0.5 s) runs alongside the app's gestures, so buttons and scroll views keep working. At the default Haptic Touch speed it also wins over a view's `.contextMenu`: the menu is cancelled before it opens.
 - **Composer and banners** live in a separate window above the app: they cover sheets and stay out of screenshots.
 - **The receiver** names the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`.
 - **Claude Code:** the mod submits the report as a prompt and tracks its turn.

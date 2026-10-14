@@ -167,7 +167,7 @@ final class FixPressRecognizer: UIGestureRecognizer {
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
         guard event.allTouches?.count == 1, let touch = touches.first else {
-            state = .failed
+            fail()
             return
         }
         self.touch = touch
@@ -180,24 +180,29 @@ final class FixPressRecognizer: UIGestureRecognizer {
         super.touchesMoved(touches, with: event)
         let point = location(in: nil)
         if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement {
-            state = .failed
+            fail()
         }
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesEnded(touches, with: event)
-        state = .failed
+        fail()
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesCancelled(touches, with: event)
-        state = .failed
+        fail()
     }
 
     override func reset() {
         super.reset()
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
         touch = nil
+    }
+
+    /// The timer fires outside touch delivery, so a touch can arrive after it recognised the press.
+    private func fail() {
+        if state == .possible { state = .failed }
     }
 
     @objc private func held() {
