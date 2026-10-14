@@ -163,7 +163,6 @@ final class FixPressRecognizer: UIGestureRecognizer {
     /// The held finger, for the app's gestures it also drives.
     private(set) weak var touch: UITouch?
     private var start = CGPoint.zero
-    private var timer: Timer?
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
@@ -174,9 +173,7 @@ final class FixPressRecognizer: UIGestureRecognizer {
         self.touch = touch
         start = touch.location(in: nil)
         // The common modes keep it running while a scroll view tracks the touch.
-        let timer = Timer(timeInterval: Self.duration, target: self, selector: #selector(held), userInfo: nil, repeats: false)
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        perform(#selector(held), with: nil, afterDelay: Self.duration, inModes: [.common])
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -199,8 +196,7 @@ final class FixPressRecognizer: UIGestureRecognizer {
 
     override func reset() {
         super.reset()
-        timer?.invalidate()
-        timer = nil
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
         touch = nil
     }
 
