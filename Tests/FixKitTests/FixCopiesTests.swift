@@ -3,7 +3,7 @@ import Testing
 
 struct FixCopiesTests {
     @Test func oneCopyIsFound() {
-        #expect(FixCopies.images().count == 1)
+        #expect(FixCopies.copies().count == 1)
     }
 
     @Test func oneCopyNeedsNoWarning() {
