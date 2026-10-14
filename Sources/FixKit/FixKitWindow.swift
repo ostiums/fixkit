@@ -24,6 +24,7 @@ final class FixHost {
         guard appWindow == nil, let scene = window.windowScene else { return }
         appWindow = window
         FixGesture.shared.install(on: window)
+        FixCopies.check()
 
         let overlay = FixOverlayWindow(windowScene: scene)
         overlay.rootViewController = FixOverlayController(rootView: FixOverlay(session: .shared, host: self))
