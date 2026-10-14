@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import UIKit.UIGestureRecognizerSubclass
 
 @MainActor
 @Observable
@@ -152,6 +153,49 @@ struct FixKitHostModifier: ViewModifier {
     }
 }
 
+/// A long press held still for half a second. Not a `UILongPressGestureRecognizer`: UIKit keeps
+/// those waiting for a context menu's press to fail, and it never fails while the menu opens.
+final class FixPressRecognizer: UIGestureRecognizer {
+    private static let duration: TimeInterval = 0.5
+    private static let allowableMovement: CGFloat = 10
+
+    private var start: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard start == nil, event.allTouches?.count == 1 else {
+            state = state == .possible ? .failed : .cancelled
+            return
+        }
+        start = location(in: nil)
+        perform(#selector(held), with: nil, afterDelay: Self.duration)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        guard state == .possible, let start else { return }
+        let point = location(in: nil)
+        if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement {
+            state = .failed
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        state = state == .possible ? .failed : .ended
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        state = state == .possible ? .failed : .cancelled
+    }
+
+    override func reset() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
+        start = nil
+    }
+
+    @objc private func held() {
+        if state == .possible { state = .began }
+    }
+}
+
 /// A long press anywhere in the window, recognised alongside the app's own gestures.
 @MainActor
 final class FixGesture: NSObject, UIGestureRecognizerDelegate {
@@ -160,13 +204,12 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     private var competing: [UIGestureRecognizer] = []
 
     func install(on window: UIWindow) {
-        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(pressed))
-        recognizer.minimumPressDuration = 0.5
+        let recognizer = FixPressRecognizer(target: self, action: #selector(pressed))
         recognizer.delegate = self
         window.addGestureRecognizer(recognizer)
     }
 
-    @objc private func pressed(_ recognizer: UILongPressGestureRecognizer) {
+    @objc private func pressed(_ recognizer: FixPressRecognizer) {
         guard recognizer.state == .began, let window = recognizer.view as? UIWindow,
               FixSession.shared.target == nil, !FixSession.shared.isSending
         else { return }
