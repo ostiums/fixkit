@@ -45,6 +45,19 @@ Xcode: File › Add Package Dependencies › `https://github.com/ostiums/fixkit`
 .package(url: "https://github.com/ostiums/fixkit", branch: "main")
 ```
 
+**Tuist:** the same line in `Tuist/Package.swift` or in `Project.swift`'s `packages:`. Add FixKit to every target with SwiftUI views, not only the app: a view in a module without it is named where it is used. When more than one dynamic framework depends on FixKit, make FixKit a framework too, so the app holds one copy of it:
+
+```swift
+// Tuist/Package.swift
+#if TUIST
+import ProjectDescription
+
+let packageSettings = PackageSettings(productTypes: ["FixKit": .framework])
+#endif
+```
+
+Tuist warns when it is left static: "Target 'FixKit' has been linked from target 'A' and target 'B', it is a static product so may introduce unwanted side effects." Each framework then holds its own copy, and the views of all but one are named where they are used.
+
 ### 3. Add one line to the app
 
 ```swift
