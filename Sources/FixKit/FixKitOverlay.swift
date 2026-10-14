@@ -69,12 +69,13 @@ struct FixComposerOverlay: View {
                     .position(x: frame.midX, y: frame.midY)
 
                 if let title {
+                    let margin: CGFloat = 12
                     // A title wider than the screen gives up its start: the file and line stay readable.
                     label(title)
                         .onGeometryChange(for: CGFloat.self, of: \.size.width) { labelWidth = $0 }
-                        .frame(maxWidth: proxy.size.width - 24)
+                        .frame(maxWidth: proxy.size.width - 2 * margin)
                         .position(
-                            x: min(max(frame.midX, labelWidth / 2 + 12), proxy.size.width - labelWidth / 2 - 12),
+                            x: min(max(frame.midX, labelWidth / 2 + margin), proxy.size.width - labelWidth / 2 - margin),
                             y: frame.minY > 120 ? frame.minY - 22 : frame.maxY + 22)
                 }
             }

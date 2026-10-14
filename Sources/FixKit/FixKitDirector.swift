@@ -54,7 +54,7 @@ final class FixDirector {
         let session = FixSession.shared
 
         // As long as a finger would rest before the long press fires.
-        try? await Task.sleep(for: .seconds(0.6))
+        try? await Task.sleep(for: .seconds(FixPressRecognizer.duration + 0.1))
         FixGesture.shared.report(at: point)
 
         try? await Task.sleep(for: .seconds(0.9))

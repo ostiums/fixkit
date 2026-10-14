@@ -156,43 +156,41 @@ struct FixKitHostModifier: ViewModifier {
 /// A long press held still for half a second. Not a `UILongPressGestureRecognizer`: UIKit keeps
 /// those waiting for a context menu's press to fail, and it never fails while the menu opens.
 final class FixPressRecognizer: UIGestureRecognizer {
-    private static let duration: TimeInterval = 0.5
+    static let duration: TimeInterval = 0.5
     private static let allowableMovement: CGFloat = 10
 
-    private var start: CGPoint?
+    /// The held finger, for the app's gestures it also drives.
+    private(set) weak var touch: UITouch?
+    private var start = CGPoint.zero
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard start == nil, event.allTouches?.count == 1 else {
-            state = state == .possible ? .failed : .cancelled
-            return
-        }
-        start = location(in: nil)
+        guard event.allTouches?.count == 1, let touch = touches.first else { return fail() }
+        self.touch = touch
+        start = touch.location(in: nil)
         perform(#selector(held), with: nil, afterDelay: Self.duration)
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard state == .possible, let start else { return }
         let point = location(in: nil)
-        if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement {
-            state = .failed
-        }
+        if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement { fail() }
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
-        state = state == .possible ? .failed : .ended
-    }
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { fail() }
 
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
-        state = state == .possible ? .failed : .cancelled
-    }
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { fail() }
 
     override func reset() {
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
-        start = nil
+        touch = nil
+    }
+
+    private func fail() {
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
+        state = .failed
     }
 
     @objc private func held() {
-        if state == .possible { state = .began }
+        state = .recognized
     }
 }
 
@@ -201,8 +199,6 @@ final class FixPressRecognizer: UIGestureRecognizer {
 final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     static let shared = FixGesture()
 
-    private var competing: [UIGestureRecognizer] = []
-
     func install(on window: UIWindow) {
         let recognizer = FixPressRecognizer(target: self, action: #selector(pressed))
         recognizer.delegate = self
@@ -210,13 +206,13 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
     }
 
     @objc private func pressed(_ recognizer: FixPressRecognizer) {
-        guard recognizer.state == .began, let window = recognizer.view as? UIWindow,
+        guard let window = recognizer.view as? UIWindow,
               FixSession.shared.target == nil, !FixSession.shared.isSending
         else { return }
 
         // The press is ours now: the button or scroll view under the finger must not also act on it.
         // The window's own recognizers are the system's touch gates and are left alone.
-        for other in competing where other.view !== window && other.isEnabled {
+        for other in recognizer.touch?.gestureRecognizers ?? [] where other.view !== window && other.isEnabled {
             other.isEnabled = false
             other.isEnabled = true
         }
@@ -257,11 +253,6 @@ final class FixGesture: NSObject, UIGestureRecognizerDelegate {
             outline.lineWidth = 2
             outline.stroke()
         }
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-        competing = touch.gestureRecognizers ?? []
-        return true
     }
 
     func gestureRecognizer(
