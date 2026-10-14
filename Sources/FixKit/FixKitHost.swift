@@ -155,6 +155,7 @@ struct FixKitHostModifier: ViewModifier {
 
 /// A long press held still for half a second. Not a `UILongPressGestureRecognizer`: UIKit keeps
 /// those waiting for a context menu's press to fail, and it never fails while the menu opens.
+@MainActor
 final class FixPressRecognizer: UIGestureRecognizer {
     static let duration: TimeInterval = 0.5
     private static let allowableMovement: CGFloat = 10
@@ -162,35 +163,50 @@ final class FixPressRecognizer: UIGestureRecognizer {
     /// The held finger, for the app's gestures it also drives.
     private(set) weak var touch: UITouch?
     private var start = CGPoint.zero
+    private var timer: Timer?
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
-        guard event.allTouches?.count == 1, let touch = touches.first else { return fail() }
+        super.touchesBegan(touches, with: event)
+        guard event.allTouches?.count == 1, let touch = touches.first else {
+            state = .failed
+            return
+        }
         self.touch = touch
         start = touch.location(in: nil)
-        perform(#selector(held), with: nil, afterDelay: Self.duration)
+        // The common modes keep it running while a scroll view tracks the touch.
+        let timer = Timer(timeInterval: Self.duration, target: self, selector: #selector(held), userInfo: nil, repeats: false)
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
         let point = location(in: nil)
-        if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement { fail() }
+        if hypot(point.x - start.x, point.y - start.y) > Self.allowableMovement {
+            state = .failed
+        }
     }
 
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) { fail() }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) { fail() }
-
-    override func reset() {
-        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
-        touch = nil
-    }
-
-    private func fail() {
-        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(held), object: nil)
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
         state = .failed
     }
 
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        state = .failed
+    }
+
+    override func reset() {
+        super.reset()
+        timer?.invalidate()
+        timer = nil
+        touch = nil
+    }
+
     @objc private func held() {
-        state = .recognized
+        // A failed press keeps its timer until UIKit resets it.
+        if state == .possible { state = .recognized }
     }
 }
 
