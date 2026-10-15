@@ -64,7 +64,8 @@ const where = (file: string, line: number) => `${relative(file)}:${line}`
 async function patch($: EngineInterface, id: string, change: (report: FixReport) => FixReport) {
   const list = await update($, reports, all => all.map(one => (one.id === id ? change(one) : one)))
   const statuses = Object.fromEntries(list.map(one => [one.id, one.status]))
-  await $.fs.write(STATUS_FILE, JSON.stringify(statuses))
+  // In the project, wherever the session's working directory has moved since: the app polls that file.
+  await $.fs.write(`${cwd}/${STATUS_FILE}`, JSON.stringify(statuses))
 }
 
 async function accept($: EngineInterface, incoming: Incoming) {
