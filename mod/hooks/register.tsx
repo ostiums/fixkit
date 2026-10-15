@@ -44,6 +44,7 @@ const RELOAD_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: '
 
 const isActive = (report: FixReport) => fixes.isActive(report.status)
 
+// The project's root: a shell cd during the session does not move it, nor a reload after one.
 let cwd = ''
 // The report whose turn is running; its prompt was submitted by this mod.
 let current: string | null = null
@@ -64,7 +65,7 @@ const where = (file: string, line: number) => `${relative(file)}:${line}`
 async function patch($: EngineInterface, id: string, change: (report: FixReport) => FixReport) {
   const list = await update($, reports, all => all.map(one => (one.id === id ? change(one) : one)))
   const statuses = Object.fromEntries(list.map(one => [one.id, one.status]))
-  // In the project the receiver was started in, wherever the session's working directory has moved since.
+  // In the project, where the receiver reads it.
   await $.fs.write(`${cwd}/${STATUS_FILE}`, JSON.stringify(statuses))
 }
 
@@ -106,7 +107,7 @@ async function launched($: EngineInterface) {
 
 async function listen($: EngineInterface) {
   await update($, receiver, (): Receiver => ({ state: 'starting', detail: '' }))
-  const child = $.process.spawn({ argv: ['node', `${$.plugin.root}/server/receiver.mjs`] })
+  const child = $.process.spawn({ argv: ['node', `${$.plugin.root}/server/receiver.mjs`], cwd })
   let pending = ''
 
   try {
@@ -149,8 +150,8 @@ async function listen($: EngineInterface) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    cwd = e.cwd
-    const readFile = (path: string) => $.fs.read(path).catch(() => null)
+    cwd = await $.session.root()
+    const readFile = (path: string) => $.fs.read(`${cwd}/${path}`).catch(() => null)
     const [packageJson, pubspec] = await Promise.all([readFile('package.json'), readFile('pubspec.yaml')])
     kind = projectKind({ packageJson, pubspec })
     if (kind === 'flutter') {

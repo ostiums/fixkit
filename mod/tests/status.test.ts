@@ -38,6 +38,7 @@ function world(on: On, files: Record<string, string> = {}) {
   const receiver = receiverLines()
   const statuses: Record<string, string>[] = []
   const registered: string[] = []
+  const spawnedIn: (string | undefined)[] = []
   const fetched: { url: string; body: string | undefined }[] = []
   let reloadAnswer = JSON.stringify({ ok: true })
   let submitted: () => void = () => {}
@@ -49,7 +50,9 @@ function world(on: On, files: Record<string, string> = {}) {
   on('ui.open', async () => ({ value: { isPlaced: true as const } }))
   on('ui.toast', async () => ({ value: undefined }))
   on('ui.log', async () => ({ value: undefined }))
-  on('process.spawn', async function* () {
+  on('session.root', async () => ({ value: '/project' }))
+  on('process.spawn', async function* (_$, e) {
+    spawnedIn.push(e.cwd)
     return yield* receiver.stream()
   })
   on('prompt.submit', async (_$, e) => {
@@ -78,7 +81,7 @@ function world(on: On, files: Record<string, string> = {}) {
   on('tool.call', async () => ({ result: 'built and launched' }))
   on('turn.complete', async () => ({ text: '' }))
 
-  return { receiver, statuses, submission, registered, fetched, answerReload: (text: string) => (reloadAnswer = text) }
+  return { receiver, statuses, submission, registered, spawnedIn, fetched, answerReload: (text: string) => (reloadAnswer = text) }
 }
 
 /** Waits until the mod has done what a receiver line asked for. */
@@ -158,6 +161,17 @@ test('a Flutter project gets the Flutter instructions and the hot_reload tool', 
 
   expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(FLUTTER_INSTRUCTIONS)
   expect(registered).toEqual(['hot_reload'])
+})
+
+test('a reload after a cd keeps the receiver and the statuses in the project', async ($, on) => {
+  const { receiver, statuses, submission, spawnedIn } = world(on)
+  await $.session.start({ cwd: '/project/Packages', surface: 'terminal', isInteractive: true })
+  receiver.send({ type: 'ready', port: 4747 })
+  receiver.send(report)
+  await submission
+  await until(() => statuses.at(-1)?.r1 === 'fixing')
+
+  expect(spawnedIn).toEqual(['/project'])
 })
 
 test('a native project registers no tool', async ($, on) => {
