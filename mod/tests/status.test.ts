@@ -71,7 +71,8 @@ function world(on: On, files: Record<string, string> = {}) {
     return { value: { status: 200, ok: true, headers: {}, text: reloadAnswer } }
   })
   on('fs.write', async (_$, e) => {
-    if (e.path.endsWith('status.json')) statuses.push(JSON.parse(e.text))
+    // The receiver reads it in the project, so a status written anywhere else is lost.
+    if (e.path === '/project/.fixkit/status.json') statuses.push(JSON.parse(e.text))
     return { value: undefined }
   })
   on('tool.call', async () => ({ result: 'built and launched' }))
