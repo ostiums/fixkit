@@ -49,7 +49,7 @@ class Client {
   Future<ReportStatus> sendReport(Map<String, Object> body) async {
     final receipt = _status(await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20)));
     if (receipt.id == null) throw const FormatException('the receipt has no id');
-    return ReportStatus(receipt.id, null, receipt.agent);
+    return receipt;
   }
 
   /// Where the report is now.

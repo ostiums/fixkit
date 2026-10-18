@@ -185,6 +185,9 @@ if (driver.watchesParent) {
   }, 1000).unref()
 }
 
+/** The app's answer about a report: the run, its status and the agent working on it. */
+const answerFor = (id, all) => ({ run, id, status: id ? (all[id] ?? 'queued') : null, agent: driver.agent })
+
 const reply = (res, code, body) => {
   res.writeHead(code, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify(body))
@@ -194,8 +197,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
 
   if (req.method === 'GET' && url.pathname === '/status') {
-    const id = url.searchParams.get('id')
-    return reply(res, 200, { run, id, status: id ? (statuses()[id] ?? 'queued') : null, agent: driver.agent })
+    return reply(res, 200, answerFor(url.searchParams.get('id'), statuses()))
   }
 
   // The app has launched: during a fix that means the fix is on screen, however it was built.
@@ -213,7 +215,7 @@ const server = createServer(async (req, res) => {
     emit({ type: 'launched' })
     const all = statuses()
     const id = Object.keys(all).find(key => ACTIVE.has(all[key])) ?? (count > 0 ? `r${count}` : null)
-    return reply(res, 200, { run, id, status: id ? (all[id] ?? 'queued') : null, agent: driver.agent })
+    return reply(res, 200, answerFor(id, all))
   }
 
   if (req.method === 'POST' && url.pathname === '/report') {

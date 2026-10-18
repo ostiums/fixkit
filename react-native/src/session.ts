@@ -126,8 +126,8 @@ async function follow(id: string) {
     try {
       answer = await statusOf(id)
     } catch {}
-    const status = answer?.status ?? null
-    if (mine !== ticket || answer === null || status === null) continue
+    if (mine !== ticket || !answer?.status) continue
+    const status = answer.status
     const agent = hear(answer)
     if (isOver(status)) {
       ticket++
