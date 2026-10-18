@@ -33,9 +33,10 @@ class Session extends ChangeNotifier {
   /// A report is on its way: the receiver answers once it has read the screen.
   bool sending = false;
 
+  /// The agent the receiver last named; null until it first answers.
+  String? agent;
+
   String _draft = '';
-  // The agent the receiver last named; null until it first answers.
-  String? _agent;
   // Each follow holds a ticket; a newer follow or a new report retires the older one.
   int _ticket = 0;
   Timer? _hiding;
@@ -92,23 +93,22 @@ class Session extends ChangeNotifier {
     outline = pressed;
     _changed();
     await _frames(2);
-    String? id;
+    ReportStatus? receipt;
     try {
-      final receipt = await _client.sendReport(
+      receipt = await _client.sendReport(
         reportBody(pressed, comment, os: osVersion(Platform.operatingSystemVersion), simulator: simulatorIn(Directory.systemTemp.path)),
       );
-      _agent = receipt.agent;
-      id = receipt.id;
     } catch (_) {}
     sending = false;
     outline = null;
+    if (receipt != null) agent = receipt.agent;
     _changed();
-    if (id == null) {
-      _show(offlineFor(_agent), hideAfter: const Duration(seconds: 4));
+    if (receipt == null) {
+      _show(offlineFor(agent), hideAfter: const Duration(seconds: 4));
       return;
     }
-    _show(sentTo(_agent ?? 'Claude Code'));
-    unawaited(_follow(id));
+    _show(sentTo(receipt.agent));
+    unawaited(_follow(receipt.id!));
   }
 
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is
@@ -118,7 +118,8 @@ class Session extends ChangeNotifier {
     try {
       final info = await developer.Service.getInfo();
       final answer = await _client.launched(info.serverUri?.toString());
-      _agent = answer.agent;
+      agent = answer.agent;
+      _changed();
       final id = answer.id;
       final status = answer.status;
       if (id != null && status != null && !isOver(status)) unawaited(_follow(id));
@@ -131,19 +132,19 @@ class Session extends ChangeNotifier {
     while (mine == _ticket) {
       await _sleep(const Duration(seconds: 1));
       if (mine != _ticket) return;
-      String? status;
+      ReportStatus? answer;
       try {
-        final answer = await _client.statusOf(id);
-        _agent = answer.agent;
-        status = answer.status;
+        answer = await _client.statusOf(id);
       } catch (_) {}
       if (mine != _ticket) return;
-      if (status == null) continue;
+      final status = answer?.status;
+      if (answer == null || status == null) continue;
+      agent = answer.agent;
       if (isOver(status)) {
-        _show(bannerFor(status, _agent ?? 'Claude Code'), hideAfter: const Duration(seconds: 4));
+        _show(bannerFor(status, answer.agent), hideAfter: const Duration(seconds: 4));
         return;
       }
-      _show(bannerFor(status, _agent ?? 'Claude Code'));
+      _show(bannerFor(status, answer.agent));
     }
   }
 

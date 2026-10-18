@@ -28,6 +28,11 @@ void main() {
     expect(offlineFor(null).glyph, '!');
   });
 
+  test('the composer asks for the agent last heard from, else for no one', () {
+    expect(composerHint('Codex'), 'What should Codex fix here?');
+    expect(composerHint(null), 'What needs fixing here?');
+  });
+
   test('a report is over once live or stopped', () {
     expect(isOver('live'), isTrue);
     expect(isOver('stopped'), isTrue);

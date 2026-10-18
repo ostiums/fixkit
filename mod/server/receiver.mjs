@@ -199,7 +199,7 @@ const server = createServer(async (req, res) => {
   }
 
   // The app has launched: during a fix that means the fix is on screen, however it was built.
-  // The answer is the report Claude is working on (reports are worked through in order), else
+  // The answer is the report the agent is working on (reports are worked through in order), else
   // the newest one, for the app to follow or announce. Every answer the app reads names the agent.
   if (req.method === 'POST' && url.pathname === '/launched') {
     // A React Native app sends a stack from the bundle it launched with, a Flutter app its VM
