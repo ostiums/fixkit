@@ -101,8 +101,8 @@ class Session extends ChangeNotifier {
     } catch (_) {}
     sending = false;
     outline = null;
-    if (receipt != null) agent = receipt.agent;
     _changed();
+    if (receipt != null) _hear(receipt.agent);
     if (receipt == null) {
       _show(offlineFor(agent), hideAfter: const Duration(seconds: 4));
       return;
@@ -118,8 +118,7 @@ class Session extends ChangeNotifier {
     try {
       final info = await developer.Service.getInfo();
       final answer = await _client.launched(info.serverUri?.toString());
-      agent = answer.agent;
-      _changed();
+      _hear(answer.agent);
       final id = answer.id;
       final status = answer.status;
       if (id != null && status != null && !isOver(status)) unawaited(_follow(id));
@@ -139,13 +138,20 @@ class Session extends ChangeNotifier {
       if (mine != _ticket) return;
       final status = answer?.status;
       if (answer == null || status == null) continue;
-      agent = answer.agent;
+      _hear(answer.agent);
       if (isOver(status)) {
         _show(bannerFor(status, answer.agent), hideAfter: const Duration(seconds: 4));
         return;
       }
       _show(bannerFor(status, answer.agent));
     }
+  }
+
+  // Keeps the agent an answer names; the composer reads it, so only a change redraws.
+  void _hear(String named) {
+    if (agent == named) return;
+    agent = named;
+    _changed();
   }
 
   Future<void> _sleep(Duration duration) {

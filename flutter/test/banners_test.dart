@@ -2,23 +2,17 @@ import 'package:fixkit/src/banners.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('each status has its words; working ones spin', () {
-    expect(bannerFor('queued', 'Claude Code').text, 'Queued in Claude Code');
-    expect(bannerFor('fixing', 'Claude Code').text, 'Claude Code is fixing it');
-    expect(bannerFor('rebuilding', 'Claude Code').text, 'Rebuilding the app');
-    expect(bannerFor('live', 'Claude Code').text, 'Fixed by Claude Code');
-    expect(bannerFor('live', 'Claude Code').working, isFalse);
-    expect(bannerFor('stopped', 'Claude Code').text, 'Not applied: see Claude Code');
-    expect(bannerFor('fixing', 'Claude Code').working, isTrue);
-  });
-
-  test('the banners name the agent that runs the fix', () {
-    expect(bannerFor('queued', 'Codex').text, 'Queued in Codex');
-    expect(bannerFor('fixing', 'Codex').text, 'Codex is fixing it');
-    expect(bannerFor('rebuilding', 'Codex').text, 'Rebuilding the app');
-    expect(bannerFor('live', 'Codex').text, 'Fixed by Codex');
-    expect(bannerFor('stopped', 'Codex').text, 'Not applied: see Codex');
-    expect(sentTo('Codex').text, 'Sent to Codex');
+  test('each status has its words, naming the agent; working ones spin', () {
+    for (final agent in ['Claude Code', 'Codex']) {
+      expect(bannerFor('queued', agent).text, 'Queued in $agent');
+      expect(bannerFor('fixing', agent).text, '$agent is fixing it');
+      expect(bannerFor('rebuilding', agent).text, 'Rebuilding the app');
+      expect(bannerFor('live', agent).text, 'Fixed by $agent');
+      expect(bannerFor('stopped', agent).text, 'Not applied: see $agent');
+      expect(sentTo(agent).text, 'Sent to $agent');
+    }
+    expect(bannerFor('live', 'Codex').working, isFalse);
+    expect(bannerFor('fixing', 'Codex').working, isTrue);
     expect(sentTo('Codex').working, isTrue);
   });
 

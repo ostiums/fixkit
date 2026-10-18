@@ -107,7 +107,6 @@ final class FixSession {
     }
 
     /// Keeps the agent an answer names, and returns it.
-    @discardableResult
     private func hear(_ named: String?) -> String {
         let heard = FixBanners.agent(from: named)
         // Observed by the composer: only a change redraws it.

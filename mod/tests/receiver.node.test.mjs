@@ -129,8 +129,9 @@ test('a report comes out on stdout, and statuses come from the file the mod writ
   assert.equal(report.report.id, 'r1')
   assert.equal(report.report.comment, 'Shifted')
 
-  assert.equal((await receiver.get('/status?id=r1')).status, 'queued')
-  assert.equal((await receiver.get('/status?id=r1')).agent, 'Claude Code')
+  const status = await receiver.get('/status?id=r1')
+  assert.equal(status.status, 'queued')
+  assert.equal(status.agent, 'Claude Code')
   writeFileSync(join(receiver.cwd, '.fixkit', 'status.json'), JSON.stringify({ r1: 'fixing' }))
   assert.equal((await receiver.get('/status?id=r1')).status, 'fixing')
 
