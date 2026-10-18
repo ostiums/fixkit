@@ -27,6 +27,7 @@ let count = 0
 
 /** Claude Code's mod reads the events on stdout and writes every status change to a file. */
 const stdoutDriver = () => ({
+  agent: 'Claude Code',
   watchesParent: true,
   emit: event => process.stdout.write(JSON.stringify(event) + '\n'),
   statuses: () => {
@@ -194,12 +195,12 @@ const server = createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/status') {
     const id = url.searchParams.get('id')
-    return reply(res, 200, { run, id, status: id ? (statuses()[id] ?? 'queued') : null })
+    return reply(res, 200, { run, id, status: id ? (statuses()[id] ?? 'queued') : null, agent: driver.agent })
   }
 
   // The app has launched: during a fix that means the fix is on screen, however it was built.
   // The answer is the report Claude is working on (reports are worked through in order), else
-  // the newest one, for the app to follow or announce.
+  // the newest one, for the app to follow or announce. Every answer the app reads names the agent.
   if (req.method === 'POST' && url.pathname === '/launched') {
     // A React Native app sends a stack from the bundle it launched with, a Flutter app its VM
     // service; a Swift app sends nothing.
@@ -212,13 +213,13 @@ const server = createServer(async (req, res) => {
     emit({ type: 'launched' })
     const all = statuses()
     const id = Object.keys(all).find(key => ACTIVE.has(all[key])) ?? (count > 0 ? `r${count}` : null)
-    return reply(res, 200, { run, id, status: id ? (all[id] ?? 'queued') : null })
+    return reply(res, 200, { run, id, status: id ? (all[id] ?? 'queued') : null, agent: driver.agent })
   }
 
   if (req.method === 'POST' && url.pathname === '/report') {
     const ready = readJson(req).then(sent => prepare(sent, `r${++count}`))
     ready.then(
-      report => reply(res, 200, { id: report.id }),
+      report => reply(res, 200, { id: report.id, agent: driver.agent }),
       error => reply(res, 400, { error: String(error) }),
     )
     delivered = delivered.then(() => ready.then(report => emit({ type: 'report', report }), () => {}))

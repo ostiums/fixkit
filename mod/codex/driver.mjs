@@ -136,6 +136,7 @@ export function codexDriver({ session, cwd, leave, log, queue = codexQueue }) {
   }
 
   return {
+    agent: 'Codex',
     watchesParent: false,
     statuses: () => Object.fromEntries(statuses),
     hook,

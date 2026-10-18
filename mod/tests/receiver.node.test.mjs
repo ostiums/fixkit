@@ -43,7 +43,9 @@ async function deliver(sent, before = async () => {}) {
   try {
     await before(base)
     const answer = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(sent) })
-    assert.equal((await answer.json()).id, 'r1')
+    const sentBack = await answer.json()
+    assert.equal(sentBack.id, 'r1')
+    assert.equal(sentBack.agent, 'Claude Code')
     await until(() => events.some(event => event.type === 'report'))
     return events.find(event => event.type === 'report').report
   } finally {
@@ -122,17 +124,19 @@ test('a report comes out on stdout, and statuses come from the file the mod writ
   const receiver = await startReceiver()
   t.after(receiver.stop)
 
-  assert.deepEqual(await receiver.post('/report', { comment: 'Shifted', screen: 'Home', simulator: 'NO-SUCH-SIMULATOR' }), { id: 'r1' })
+  assert.deepEqual(await receiver.post('/report', { comment: 'Shifted', screen: 'Home', simulator: 'NO-SUCH-SIMULATOR' }), { id: 'r1', agent: 'Claude Code' })
   const report = await until(() => receiver.lines.find(line => line.type === 'report'))
   assert.equal(report.report.id, 'r1')
   assert.equal(report.report.comment, 'Shifted')
 
   assert.equal((await receiver.get('/status?id=r1')).status, 'queued')
+  assert.equal((await receiver.get('/status?id=r1')).agent, 'Claude Code')
   writeFileSync(join(receiver.cwd, '.fixkit', 'status.json'), JSON.stringify({ r1: 'fixing' }))
   assert.equal((await receiver.get('/status?id=r1')).status, 'fixing')
 
   const launched = await receiver.post('/launched', {})
   assert.equal(launched.id, 'r1')
+  assert.equal(launched.agent, 'Claude Code')
   await until(() => receiver.lines.some(line => line.type === 'launched'))
 })
 
@@ -141,6 +145,7 @@ test('with --codex the receiver serves its Codex session and prints nothing', as
   t.after(receiver.stop)
 
   assert.deepEqual(await receiver.get('/codex/session'), { session: 'S1' })
+  assert.equal((await receiver.get('/status')).agent, 'Codex')
   assert.deepEqual(receiver.lines, [])
 })
 
