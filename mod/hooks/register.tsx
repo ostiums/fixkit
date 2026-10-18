@@ -45,17 +45,17 @@ const RELOAD_LOOK: typeof LOOK = { ...LOOK, stopped: { ...LOOK.stopped, label: '
 const isActive = (report: FixReport) => fixes.isActive(report.status)
 
 // The project's root: a shell cd during the session does not move it, nor a reload after one.
-let cwd = ''
+let root = ''
 // The report whose turn is running; its prompt was submitted by this mod.
 let current: string | null = null
-// What the project in the working directory is built with: it picks the system prompt section, the
-// pane's words and, in a Flutter project, the hot_reload tool.
+// What the project is built with: it picks the system prompt section, the pane's words and, in a
+// Flutter project, the hot_reload tool.
 let kind: ProjectKind = 'native'
 // The receiver's port, once it listens: the hot_reload tool asks it.
 let port: number | null = null
 
 function relative(path: string) {
-  return cwd && path.startsWith(cwd + '/') ? path.slice(cwd.length + 1) : path
+  return root && path.startsWith(root + '/') ? path.slice(root.length + 1) : path
 }
 
 /** `path:line`, the path relative to the project. */
@@ -66,7 +66,7 @@ async function patch($: EngineInterface, id: string, change: (report: FixReport)
   const list = await update($, reports, all => all.map(one => (one.id === id ? change(one) : one)))
   const statuses = Object.fromEntries(list.map(one => [one.id, one.status]))
   // In the project, where the receiver reads it.
-  await $.fs.write(`${cwd}/${STATUS_FILE}`, JSON.stringify(statuses))
+  await $.fs.write(`${root}/${STATUS_FILE}`, JSON.stringify(statuses))
 }
 
 async function accept($: EngineInterface, incoming: Incoming) {
@@ -107,7 +107,7 @@ async function launched($: EngineInterface) {
 
 async function listen($: EngineInterface) {
   await update($, receiver, (): Receiver => ({ state: 'starting', detail: '' }))
-  const child = $.process.spawn({ argv: ['node', `${$.plugin.root}/server/receiver.mjs`], cwd })
+  const child = $.process.spawn({ argv: ['node', `${$.plugin.root}/server/receiver.mjs`], cwd: root })
   let pending = ''
 
   try {
@@ -150,8 +150,8 @@ async function listen($: EngineInterface) {
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    cwd = await $.session.root()
-    const readFile = (path: string) => $.fs.read(`${cwd}/${path}`).catch(() => null)
+    root = await $.session.root()
+    const readFile = (path: string) => $.fs.read(`${root}/${path}`).catch(() => null)
     const [packageJson, pubspec] = await Promise.all([readFile('package.json'), readFile('pubspec.yaml')])
     kind = projectKind({ packageJson, pubspec })
     if (kind === 'flutter') {
