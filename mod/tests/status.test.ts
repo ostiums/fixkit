@@ -30,6 +30,9 @@ function receiverLines() {
   }
 }
 
+/** The project's root, where the session starts unless a test says otherwise. */
+const ROOT = '/project'
+
 /**
  * The world beneath the mod: a receiver the test drives, the project's `files`, the statuses the mod
  * publishes, the tools it registers and what it fetches.
@@ -50,7 +53,7 @@ function world(on: On, files: Record<string, string> = {}) {
   on('ui.open', async () => ({ value: { isPlaced: true as const } }))
   on('ui.toast', async () => ({ value: undefined }))
   on('ui.log', async () => ({ value: undefined }))
-  on('session.root', async () => ({ value: '/project' }))
+  on('session.root', async () => ({ value: ROOT }))
   on('process.spawn', async function* (_$, e) {
     spawnedIn.push(e.cwd)
     return yield* receiver.stream()
@@ -61,7 +64,7 @@ function world(on: On, files: Record<string, string> = {}) {
   })
   // The project's files are in its root; anywhere else there are none.
   on('fs.read', async (_$, e) => {
-    const text = e.path.startsWith('/project/') ? files[e.path.slice('/project/'.length)] : undefined
+    const text = e.path.startsWith(`${ROOT}/`) ? files[e.path.slice(ROOT.length + 1)] : undefined
     if (text === undefined) throw new Error('ENOENT')
     return { value: text }
   })
@@ -75,7 +78,7 @@ function world(on: On, files: Record<string, string> = {}) {
   })
   on('fs.write', async (_$, e) => {
     // The receiver reads it in the project, so a status written anywhere else is lost.
-    if (e.path === '/project/.fixkit/status.json') statuses.push(JSON.parse(e.text))
+    if (e.path === `${ROOT}/.fixkit/status.json`) statuses.push(JSON.parse(e.text))
     return { value: undefined }
   })
   on('tool.call', async () => ({ result: 'built and launched' }))
@@ -96,7 +99,7 @@ const turnEnd = { answer: 'Fixed.', durationMs: 1, isAborted: false, turnId: 't1
 const report = { type: 'report', report: { id: 'r1', comment: 'Income should be green', screen: 'Activity', screenshot: null } }
 
 /** Starts the session in `cwd`, its receiver ready on `port`, and hands Claude the report to fix. */
-async function fixing($: Engine, { receiver, statuses, submission }: ReturnType<typeof world>, port: number, cwd = '/project') {
+async function fixing($: Engine, { receiver, statuses, submission }: ReturnType<typeof world>, port: number, cwd = ROOT) {
   await $.session.start({ cwd, surface: 'terminal', isInteractive: true })
   receiver.send({ type: 'ready', port })
   receiver.send(report)
@@ -119,7 +122,7 @@ test('a launch during the fix makes the report live, and an answer keeps it live
 
 test('without a launch the fix is not on screen', async ($, on) => {
   const { receiver, statuses, submission } = world(on)
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   receiver.send(report)
   await submission
   await until(() => statuses.at(-1)?.r1 === 'fixing')
@@ -136,7 +139,7 @@ test('a React Native project gets the React Native instructions', async ($, on) 
   const app = JSON.stringify({ dependencies: { 'react-native': '0.86.3' } })
   world(on, { 'package.json': app })
   on('prompt.compose', async () => ({ sections: [] }))
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   const { sections } = await $.prompt.compose(composing)
 
   expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(RN_INSTRUCTIONS)
@@ -145,7 +148,7 @@ test('a React Native project gets the React Native instructions', async ($, on) 
 test('without a package.json the instructions are the iOS ones', async ($, on) => {
   world(on)
   on('prompt.compose', async () => ({ sections: [] }))
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   const { sections } = await $.prompt.compose(composing)
 
   expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(INSTRUCTIONS)
@@ -156,7 +159,7 @@ const pubspec = 'name: wallet\ndependencies:\n  flutter:\n    sdk: flutter\n'
 test('a Flutter project gets the Flutter instructions and the hot_reload tool', async ($, on) => {
   const { registered } = world(on, { 'pubspec.yaml': pubspec })
   on('prompt.compose', async () => ({ sections: [] }))
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
   const { sections } = await $.prompt.compose(composing)
 
   expect(sections.find(section => section.id === 'fixkit:fix-requests')?.text).toBe(FLUTTER_INSTRUCTIONS)
@@ -165,15 +168,15 @@ test('a Flutter project gets the Flutter instructions and the hot_reload tool', 
 
 test('a session started below the root keeps the receiver, the statuses and the manifests in the project', async ($, on) => {
   const mod = world(on, { 'pubspec.yaml': pubspec })
-  await fixing($, mod, 4747, '/project/Packages')
+  await fixing($, mod, 4747, `${ROOT}/Packages`)
 
-  expect(mod.spawnedIn).toEqual(['/project'])
+  expect(mod.spawnedIn).toEqual([ROOT])
   expect(mod.registered).toEqual(['hot_reload'])
 })
 
 test('a native project registers no tool', async ($, on) => {
   const { registered } = world(on)
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  await $.session.start({ cwd: ROOT, surface: 'terminal', isInteractive: true })
 
   expect(registered).toEqual([])
 })
