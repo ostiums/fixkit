@@ -17,6 +17,9 @@ final class FixSession {
     /// a new long press would change the screen it reads.
     private(set) var isSending = false
 
+    /// The agent the receiver last named; nil until it has answered.
+    @ObservationIgnored private var agent: String?
+
     struct Banner: Equatable {
         var text: String
         var symbol: String
@@ -66,13 +69,14 @@ final class FixSession {
             // to what was pressed.
             await dismiss()
             do {
-                let id = try await FixKitClient.send(target, comment: comment)
+                let receipt = try await FixKitClient.send(target, comment: comment)
+                let agent = hear(receipt.agent)
                 isSending = false
-                show(Banner(text: "Sent to Claude Code", symbol: "paperplane.fill", isWorking: true))
-                await follow(id)
+                show(Banner(text: FixBanners.sent(to: agent), symbol: "paperplane.fill", isWorking: true))
+                await follow(receipt.id)
             } catch {
                 isSending = false
-                show(Banner(text: "Claude Code is not listening", symbol: "wifi.slash"), for: 4)
+                show(Banner(text: FixBanners.notListening(agent: agent), symbol: "wifi.slash"), for: 4)
             }
         }
     }
@@ -94,6 +98,7 @@ final class FixSession {
         guard let latest = try? await FixKitClient.launched(), let id = latest.id, let status = latest.status
         else { return }
 
+        hear(latest.agent)
         switch status {
         case "live": announceFixed(latest)
         case "stopped": break
@@ -101,11 +106,19 @@ final class FixSession {
         }
     }
 
+    /// Keeps the agent an answer names, and returns it.
+    @discardableResult
+    private func hear(_ named: String?) -> String {
+        let heard = FixBanners.agent(from: named)
+        agent = heard
+        return heard
+    }
+
     private func announceFixed(_ fix: FixStatus) {
         let key = "\(fix.run)/\(fix.id ?? "")"
         guard UserDefaults.standard.string(forKey: "fixkit.announced") != key else { return }
         UserDefaults.standard.set(key, forKey: "fixkit.announced")
-        show(Banner(text: "Fixed by Claude Code", symbol: "checkmark.circle.fill"), for: 4)
+        show(Banner(text: FixBanners.fixed(by: agent ?? FixBanners.agent(from: nil)), symbol: "checkmark.circle.fill"), for: 4)
     }
 
     private func follow(_ id: String) async {
@@ -113,19 +126,20 @@ final class FixSession {
             try? await Task.sleep(for: .seconds(1))
             guard let latest = try? await FixKitClient.status(of: id), let status = latest.status else { continue }
 
+            let agent = hear(latest.agent)
             switch status {
             case "fixing":
-                show(Banner(text: "Claude is fixing it", symbol: "wand.and.stars", isWorking: true))
+                show(Banner(text: FixBanners.fixing(by: agent), symbol: "wand.and.stars", isWorking: true))
             case "rebuilding":
                 show(Banner(text: "Rebuilding the app", symbol: "hammer.fill", isWorking: true))
             case "live":
                 announceFixed(latest)
                 return
             case "stopped":
-                show(Banner(text: "Not rebuilt: see Claude Code", symbol: "xmark.circle.fill"), for: 4)
+                show(Banner(text: FixBanners.stopped(by: agent), symbol: "xmark.circle.fill"), for: 4)
                 return
             default:
-                show(Banner(text: "Queued in Claude Code", symbol: "tray.full.fill", isWorking: true))
+                show(Banner(text: FixBanners.queued(in: agent), symbol: "tray.full.fill", isWorking: true))
             }
         }
     }
@@ -140,6 +154,23 @@ final class FixSession {
             guard !Task.isCancelled else { return }
             withAnimation(.snappy) { self.banner = nil }
         }
+    }
+}
+
+/// The banner texts, which name the agent the receiver says is running the fix.
+enum FixBanners {
+    /// An answer without an agent comes from an older receiver, which only drove Claude Code.
+    static func agent(from named: String?) -> String { named ?? "Claude Code" }
+
+    static func sent(to agent: String) -> String { "Sent to \(agent)" }
+    static func queued(in agent: String) -> String { "Queued in \(agent)" }
+    static func fixing(by agent: String) -> String { "\(agent) is fixing it" }
+    static func fixed(by agent: String) -> String { "Fixed by \(agent)" }
+    static func stopped(by agent: String) -> String { "Not rebuilt: see \(agent)" }
+
+    /// The receiver did not answer, so only an agent heard from earlier can be named.
+    static func notListening(agent: String?) -> String {
+        agent.map { "\($0) is not listening" } ?? "No agent is listening"
     }
 }
 

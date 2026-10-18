@@ -16,6 +16,15 @@ struct FixStatus: Decodable {
     let run: String
     let id: String?
     let status: String?
+    /// The agent working on the report; an older receiver leaves it out.
+    let agent: String?
+}
+
+/// The receiver's answer to a report.
+struct FixReceipt: Decodable {
+    let id: String
+    /// The agent the report went to; an older receiver leaves it out.
+    let agent: String?
 }
 
 /// Talks to the receiver the fixkit mod runs on this Mac. The simulator
@@ -29,8 +38,8 @@ enum FixKitClient {
         return URLSession(configuration: configuration)
     }()
 
-    /// Sends the report and returns the id the receiver gave it.
-    static func send(_ target: FixTarget, comment: String) async throws -> String {
+    /// Sends the report and returns the receiver's receipt: the id it gave the report and the agent it went to.
+    static func send(_ target: FixTarget, comment: String) async throws -> FixReceipt {
         var body: [String: Any] = [
             "comment": comment,
             "screen": target.screen,
@@ -73,7 +82,7 @@ enum FixKitClient {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(Receipt.self, from: data).id
+        return try JSONDecoder().decode(FixReceipt.self, from: data)
     }
 
     /// The status of one report.
@@ -83,17 +92,13 @@ enum FixKitClient {
         return try JSONDecoder().decode(FixStatus.self, from: data)
     }
 
-    /// Says the app has launched, and returns the status of the report Claude is working on,
+    /// Says the app has launched, and returns the status of the report the agent is working on,
     /// else of the newest one.
     static func launched() async throws -> FixStatus {
         var request = URLRequest(url: base.appending(path: "launched"))
         request.httpMethod = "POST"
         let (data, _) = try await session.data(for: request)
         return try JSONDecoder().decode(FixStatus.self, from: data)
-    }
-
-    private struct Receipt: Decodable {
-        let id: String
     }
 }
 #endif
