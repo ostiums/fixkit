@@ -1,6 +1,6 @@
 import { Keyboard, Platform } from 'react-native'
 
-import { OFFLINE, SENT, bannerFor, type Banner } from './banners'
+import { agentOf, bannerFor, offline, sentTo, type Banner } from './banners'
 import { launched, sendReport, statusOf } from './client'
 import { reportBody, type Target } from './report'
 
@@ -21,6 +21,8 @@ export type SessionState = {
 let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0 }
 // The comment being typed, out of the state: a keystroke re-renders nothing unless `canSend` changes.
 let draft = ''
+// The agent the receiver last named, for banners: an offline receiver cannot say.
+let agent: string | null = null
 const listeners = new Set<() => void>()
 
 function set(change: Partial<SessionState>) {
@@ -44,7 +46,7 @@ let hiding: ReturnType<typeof setTimeout> | null = null
 // How long the host's spring takes to slide the app back down.
 const LIFT_SETTLES = 400
 
-/** A report Claude is done with: its fix is on screen, or the turn ended without it. */
+/** A report the agent is done with: its fix is on screen, or the turn ended without it. */
 const isOver = (status: string) => status === 'live' || status === 'stopped'
 
 export const isBusy = () => state.target !== null || state.sending
@@ -83,26 +85,30 @@ export async function send() {
   await frames(2)
   let id: string | null = null
   try {
-    id = await sendReport(reportBody(target, comment, String(Platform.Version)))
+    const receipt = await sendReport(reportBody(target, comment, String(Platform.Version)))
+    agent = agentOf(receipt)
+    id = receipt.id
   } catch {}
   set({ sending: false, outline: null })
   if (id === null) {
-    show(OFFLINE, 4000)
+    show(offline(agent), 4000)
     return
   }
-  show(SENT)
+  show(sentTo(agent!))
   void follow(id)
 }
 
 /**
  * At launch and after every Fast Refresh: tells the receiver the app runs its latest code, which is
- * how the mod learns a fix is on screen, then follows the report Claude is working on. A report
+ * how the mod learns a fix is on screen, then follows the report the agent is working on. A report
  * already over shows nothing, so a later reload never repeats its banner. `stack`, a stack from the
  * bundle that runs, is given at launch only: a Fast Refresh does not reload the bundle.
  */
 export async function announceLaunch(stack: string | null = null) {
   try {
-    const { id, status } = await launched(stack)
+    const answer = await launched(stack)
+    agent = agentOf(answer)
+    const { id, status } = answer
     if (id && status && !isOver(status)) void follow(id)
   } catch {}
 }
@@ -113,15 +119,17 @@ async function follow(id: string) {
     await sleep(1000)
     let status: string | null = null
     try {
-      status = (await statusOf(id)).status
+      const answer = await statusOf(id)
+      agent = agentOf(answer)
+      status = answer.status
     } catch {}
     if (mine !== ticket || status === null) continue
     if (isOver(status)) {
       ticket++
-      show(bannerFor(status), 4000)
+      show(bannerFor(status, agent!), 4000)
       return
     }
-    show(bannerFor(status))
+    show(bannerFor(status, agent!))
   }
 }
 
