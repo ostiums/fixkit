@@ -59,9 +59,9 @@ function world(on: On, files: Record<string, string> = {}) {
     submitted()
     return { text: e.text }
   })
-  // The mod reads the project's files by their names in the working directory.
+  // The project's files are in its root; anywhere else there are none.
   on('fs.read', async (_$, e) => {
-    const text = files[e.path.split('/').pop() ?? e.path]
+    const text = e.path.startsWith('/project/') ? files[e.path.slice('/project/'.length)] : undefined
     if (text === undefined) throw new Error('ENOENT')
     return { value: text }
   })
@@ -95,9 +95,9 @@ async function until(done: () => boolean) {
 const turnEnd = { answer: 'Fixed.', durationMs: 1, isAborted: false, turnId: 't1' } as const
 const report = { type: 'report', report: { id: 'r1', comment: 'Income should be green', screen: 'Activity', screenshot: null } }
 
-/** Starts the session, its receiver ready on `port`, and hands Claude the report to fix. */
-async function fixing($: Engine, { receiver, statuses, submission }: ReturnType<typeof world>, port: number) {
-  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+/** Starts the session in `cwd`, its receiver ready on `port`, and hands Claude the report to fix. */
+async function fixing($: Engine, { receiver, statuses, submission }: ReturnType<typeof world>, port: number, cwd = '/project') {
+  await $.session.start({ cwd, surface: 'terminal', isInteractive: true })
   receiver.send({ type: 'ready', port })
   receiver.send(report)
   await submission
@@ -163,15 +163,12 @@ test('a Flutter project gets the Flutter instructions and the hot_reload tool', 
   expect(registered).toEqual(['hot_reload'])
 })
 
-test('a reload after a cd keeps the receiver and the statuses in the project', async ($, on) => {
-  const { receiver, statuses, submission, spawnedIn } = world(on)
-  await $.session.start({ cwd: '/project/Packages', surface: 'terminal', isInteractive: true })
-  receiver.send({ type: 'ready', port: 4747 })
-  receiver.send(report)
-  await submission
-  await until(() => statuses.at(-1)?.r1 === 'fixing')
+test('a session started below the root keeps the receiver, the statuses and the manifests in the project', async ($, on) => {
+  const mod = world(on, { 'pubspec.yaml': pubspec })
+  await fixing($, mod, 4747, '/project/Packages')
 
-  expect(spawnedIn).toEqual(['/project'])
+  expect(mod.spawnedIn).toEqual(['/project'])
+  expect(mod.registered).toEqual(['hot_reload'])
 })
 
 test('a native project registers no tool', async ($, on) => {
