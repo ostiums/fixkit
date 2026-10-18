@@ -34,6 +34,8 @@ class Session extends ChangeNotifier {
   bool sending = false;
 
   String _draft = '';
+  // The agent the receiver last named; null until it first answers.
+  String? _agent;
   // Each follow holds a ticket; a newer follow or a new report retires the older one.
   int _ticket = 0;
   Timer? _hiding;
@@ -92,28 +94,31 @@ class Session extends ChangeNotifier {
     await _frames(2);
     String? id;
     try {
-      id = await _client.sendReport(
+      final receipt = await _client.sendReport(
         reportBody(pressed, comment, os: osVersion(Platform.operatingSystemVersion), simulator: simulatorIn(Directory.systemTemp.path)),
       );
+      _agent = receipt.agent;
+      id = receipt.id;
     } catch (_) {}
     sending = false;
     outline = null;
     _changed();
     if (id == null) {
-      _show(offline, hideAfter: const Duration(seconds: 4));
+      _show(offlineFor(_agent), hideAfter: const Duration(seconds: 4));
       return;
     }
-    _show(sent);
+    _show(sentTo(_agent ?? 'Claude Code'));
     unawaited(_follow(id));
   }
 
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is
   /// how the mod learns a fix is on screen, and where its VM service is; then follows the report
-  /// Claude is working on. A report already over shows nothing, so a later reload never repeats it.
+  /// the agent is working on. A report already over shows nothing, so a later reload never repeats it.
   Future<void> announceLaunch() async {
     try {
       final info = await developer.Service.getInfo();
       final answer = await _client.launched(info.serverUri?.toString());
+      _agent = answer.agent;
       final id = answer.id;
       final status = answer.status;
       if (id != null && status != null && !isOver(status)) unawaited(_follow(id));
@@ -128,15 +133,17 @@ class Session extends ChangeNotifier {
       if (mine != _ticket) return;
       String? status;
       try {
-        status = (await _client.statusOf(id)).status;
+        final answer = await _client.statusOf(id);
+        _agent = answer.agent;
+        status = answer.status;
       } catch (_) {}
       if (mine != _ticket) return;
       if (status == null) continue;
       if (isOver(status)) {
-        _show(bannerFor(status), hideAfter: const Duration(seconds: 4));
+        _show(bannerFor(status, _agent ?? 'Claude Code'), hideAfter: const Duration(seconds: 4));
         return;
       }
-      _show(bannerFor(status));
+      _show(bannerFor(status, _agent ?? 'Claude Code'));
     }
   }
 

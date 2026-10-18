@@ -6,20 +6,21 @@ import 'package:flutter_test/flutter_test.dart';
 class FakeClient extends Client {
   final reports = <Map<String, Object>>[];
   String? Function() answer = () => 'r1';
+  String agent = 'Claude Code';
 
   @override
-  Future<String> sendReport(Map<String, Object> body) async {
+  Future<ReportStatus> sendReport(Map<String, Object> body) async {
     reports.add(body);
     final id = answer();
     if (id == null) throw Exception('offline');
-    return id;
+    return ReportStatus(id, null, agent);
   }
 
   @override
-  Future<ReportStatus> statusOf(String id) async => ReportStatus(id, 'live');
+  Future<ReportStatus> statusOf(String id) async => ReportStatus(id, 'live', agent);
 
   @override
-  Future<ReportStatus> launched(String? vmService) async => const ReportStatus(null, null);
+  Future<ReportStatus> launched(String? vmService) async => ReportStatus(null, null, agent);
 }
 
 const target = Target(Offset(10, 20), Found(name: 'Card › Text'));
@@ -67,9 +68,22 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await sending;
 
-    expect(session.banner?.text, 'Claude Code is not listening');
+    expect(session.banner?.text, 'No agent is listening');
     await tester.pump(const Duration(seconds: 5));
     expect(session.banner, isNull);
+    session.dispose();
+  });
+
+  testWidgets('the banner names the agent the receiver answers with', (tester) async {
+    final client = FakeClient()..agent = 'Codex';
+    final session = Session(client: client)..begin(target);
+    session.setDraft('x');
+    final sending = session.send();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+    await sending;
+
+    expect(session.banner?.text, 'Sent to Codex');
     session.dispose();
   });
 }
