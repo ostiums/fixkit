@@ -1,7 +1,7 @@
 import { Keyboard, Platform } from 'react-native'
 
 import { agentOf, bannerFor, offline, sentTo, type Banner } from './banners'
-import { launched, sendReport, statusOf } from './client'
+import { launched, sendReport, statusOf, type Receipt, type ReportStatus } from './client'
 import { reportBody, type Target } from './report'
 
 export type SessionState = {
@@ -16,18 +16,25 @@ export type SessionState = {
   sending: boolean
   /** How far the app is slid up so the composer does not cover the pressed element. */
   lift: number
+  /** The agent the receiver last named; an offline receiver cannot say. */
+  agent: string | null
 }
 
-let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0 }
+let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0, agent: null }
 // The comment being typed, out of the state: a keystroke re-renders nothing unless `canSend` changes.
 let draft = ''
-// The agent the receiver last named, for banners: an offline receiver cannot say.
-let agent: string | null = null
 const listeners = new Set<() => void>()
 
 function set(change: Partial<SessionState>) {
   state = { ...state, ...change }
   listeners.forEach(listener => listener())
+}
+
+/** Keeps the agent an answer names, and returns it. */
+function hear(answer: { agent?: string }) {
+  const agent = agentOf(answer)
+  if (agent !== state.agent) set({ agent })
+  return agent
 }
 
 export const store = {
@@ -83,19 +90,17 @@ export async function send() {
   await Promise.all([keyboardGone(), lift > 0 ? sleep(LIFT_SETTLES) : null])
   set({ outline: target })
   await frames(2)
-  let id: string | null = null
+  let receipt: Receipt | null = null
   try {
-    const receipt = await sendReport(reportBody(target, comment, String(Platform.Version)))
-    agent = agentOf(receipt)
-    id = receipt.id
+    receipt = await sendReport(reportBody(target, comment, String(Platform.Version)))
   } catch {}
   set({ sending: false, outline: null })
-  if (id === null) {
-    show(offline(agent), 4000)
+  if (receipt === null) {
+    show(offline(state.agent), 4000)
     return
   }
-  show(sentTo(agent!))
-  void follow(id)
+  show(sentTo(hear(receipt)))
+  void follow(receipt.id)
 }
 
 /**
@@ -107,7 +112,7 @@ export async function send() {
 export async function announceLaunch(stack: string | null = null) {
   try {
     const answer = await launched(stack)
-    agent = agentOf(answer)
+    hear(answer)
     const { id, status } = answer
     if (id && status && !isOver(status)) void follow(id)
   } catch {}
@@ -117,19 +122,19 @@ async function follow(id: string) {
   const mine = ++ticket
   while (mine === ticket) {
     await sleep(1000)
-    let status: string | null = null
+    let answer: ReportStatus | null = null
     try {
-      const answer = await statusOf(id)
-      agent = agentOf(answer)
-      status = answer.status
+      answer = await statusOf(id)
     } catch {}
-    if (mine !== ticket || status === null) continue
+    const status = answer?.status ?? null
+    if (mine !== ticket || answer === null || status === null) continue
+    const agent = hear(answer)
     if (isOver(status)) {
       ticket++
-      show(bannerFor(status, agent!), 4000)
+      show(bannerFor(status, agent), 4000)
       return
     }
-    show(bannerFor(status, agent!))
+    show(bannerFor(status, agent))
   }
 }
 

@@ -201,7 +201,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
       ValueListenableBuilder(
         valueListenable: _text,
         builder: (context, value, _) => value.text.isEmpty
-            ? const Text('What should Claude fix here?', style: TextStyle(color: Color(0x8CFFFFFF), fontSize: 16))
+            ? Text(composerHint(session.agent), style: const TextStyle(color: Color(0x8CFFFFFF), fontSize: 16))
             : const SizedBox.shrink(),
       ),
       EditableText(

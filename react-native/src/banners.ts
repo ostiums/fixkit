@@ -13,6 +13,9 @@ export const offline = (agent: string | null): Banner => ({
   working: false,
 })
 
+/** The composer's placeholder: the agent last heard from, if any. */
+export const composerHint = (agent: string | null) => (agent === null ? 'What needs fixing here?' : `What should ${agent} fix here?`)
+
 /** The banner for a report's status as the receiver gives it. */
 export function bannerFor(status: string, agent: string): Banner {
   switch (status) {

@@ -23,8 +23,7 @@ async function call<T>(path: string, init: RequestInit | undefined, timeout: num
 /** Sends the report and returns its receipt. The receiver answers once it has read the screen. */
 export async function sendReport(body: object) {
   const headers = { 'Content-Type': 'application/json' }
-  const receipt = await call<Receipt>('/report', { method: 'POST', headers, body: JSON.stringify(body) }, 20_000)
-  return receipt
+  return call<Receipt>('/report', { method: 'POST', headers, body: JSON.stringify(body) }, 20_000)
 }
 
 export const statusOf = (id: string) => call<ReportStatus>(`/status?id=${encodeURIComponent(id)}`, undefined, 3_000)

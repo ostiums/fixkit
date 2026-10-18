@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { agentOf, bannerFor, offline, sentTo } from '../src/banners.ts'
+import { agentOf, bannerFor, composerHint, offline, sentTo } from '../src/banners.ts'
 
 test('sent and offline banners name the agent', () => {
   assert.equal(sentTo('Claude Code').text, 'Sent to Claude Code')
@@ -29,4 +29,9 @@ test('each status names the agent where it speaks of one', () => {
 test('an answer without an agent comes from an older receiver: Claude Code', () => {
   assert.equal(agentOf({ agent: 'Codex' }), 'Codex')
   assert.equal(agentOf({}), 'Claude Code')
+})
+
+test('the composer asks for the agent last heard from, else for no one', () => {
+  assert.equal(composerHint('Codex'), 'What should Codex fix here?')
+  assert.equal(composerHint(null), 'What needs fixing here?')
 })

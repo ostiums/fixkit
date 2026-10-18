@@ -14,6 +14,9 @@ StatusBanner sentTo(String agent) => StatusBanner('Sent to $agent', working: tru
 StatusBanner offlineFor(String? agent) =>
     StatusBanner(agent == null ? 'No agent is listening' : '$agent is not listening', glyph: '!');
 
+/// The composer's placeholder: the agent last heard from, if any.
+String composerHint(String? agent) => agent == null ? 'What needs fixing here?' : 'What should $agent fix here?';
+
 /// The banner for a report's status as the receiver gives it.
 StatusBanner bannerFor(String status, String agent) => switch (status) {
   'fixing' => StatusBanner('$agent is fixing it', working: true),
