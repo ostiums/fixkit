@@ -6,12 +6,13 @@ import 'dart:io';
 // interface, so no address has to be configured; `--dart-define=FIXKIT_PORT=…` picks another port.
 const _port = String.fromEnvironment('FIXKIT_PORT', defaultValue: '4747');
 
-/// The receiver's answer about a report: its id and where Claude is with it.
+/// The receiver's answer about a report: its id, where the agent is with it, and the agent's name.
 class ReportStatus {
-  const ReportStatus(this.id, this.status);
+  const ReportStatus(this.id, this.status, this.agent);
 
   final String? id;
   final String? status;
+  final String agent;
 }
 
 /// The receiver's HTTP API on 127.0.0.1, one connection per call.
@@ -39,13 +40,16 @@ class Client {
 
   static ReportStatus _status(Object? json) {
     final map = json is Map ? json : const {};
-    return ReportStatus(map['id'] as String?, map['status'] as String?);
+    // An older receiver names no agent: it ran Claude Code.
+    return ReportStatus(map['id'] as String?, map['status'] as String?, map['agent'] as String? ?? 'Claude Code');
   }
 
-  /// Sends the report and returns its id. The receiver answers once it has read the screen.
-  Future<String> sendReport(Map<String, Object> body) async {
-    final receipt = await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20));
-    return (receipt as Map)['id'] as String;
+  /// Sends the report and returns its receipt: the id, no status yet, and the agent. The receiver
+  /// answers once it has read the screen.
+  Future<ReportStatus> sendReport(Map<String, Object> body) async {
+    final receipt = _status(await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20)));
+    if (receipt.id == null) throw const FormatException('the receipt has no id');
+    return ReportStatus(receipt.id, null, receipt.agent);
   }
 
   /// Where the report is now.
@@ -53,7 +57,7 @@ class Client {
       _status(await _call('GET', '/status?id=${Uri.encodeQueryComponent(id)}', timeout: const Duration(seconds: 3)));
 
   /// Says the app is up with its latest code, and where its VM service is, which the receiver hot
-  /// reloads it through; answers the report Claude is working on, else the newest.
+  /// reloads it through; answers the report the agent is working on, else the newest.
   Future<ReportStatus> launched(String? vmService) async => _status(
     await _call('POST', '/launched', body: {'vmService': ?vmService}, timeout: const Duration(seconds: 3)),
   );

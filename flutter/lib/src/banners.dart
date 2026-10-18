@@ -7,17 +7,21 @@ class StatusBanner {
   final bool working;
 }
 
-const sent = StatusBanner('Sent to Claude Code', working: true);
-const offline = StatusBanner('Claude Code is not listening', glyph: '!');
+/// The report went to `agent`.
+StatusBanner sentTo(String agent) => StatusBanner('Sent to $agent', working: true);
+
+/// The receiver did not answer; `agent` is the one last heard from, null before any answer.
+StatusBanner offlineFor(String? agent) =>
+    StatusBanner(agent == null ? 'No agent is listening' : '$agent is not listening', glyph: '!');
 
 /// The banner for a report's status as the receiver gives it.
-StatusBanner bannerFor(String status) => switch (status) {
-  'fixing' => const StatusBanner('Claude is fixing it', working: true),
+StatusBanner bannerFor(String status, String agent) => switch (status) {
+  'fixing' => StatusBanner('$agent is fixing it', working: true),
   'rebuilding' => const StatusBanner('Rebuilding the app', working: true),
-  'live' => const StatusBanner('Fixed by Claude Code', glyph: '✓'),
-  'stopped' => const StatusBanner('Not applied: see Claude Code', glyph: '✕'),
-  _ => const StatusBanner('Queued in Claude Code', working: true),
+  'live' => StatusBanner('Fixed by $agent', glyph: '✓'),
+  'stopped' => StatusBanner('Not applied: see $agent', glyph: '✕'),
+  _ => StatusBanner('Queued in $agent', working: true),
 };
 
-/// A report Claude is done with: its fix is on screen, or the turn ended without it.
+/// A report the agent is done with: its fix is on screen, or the turn ended without it.
 bool isOver(String status) => status == 'live' || status == 'stopped';
