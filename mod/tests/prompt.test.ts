@@ -243,3 +243,12 @@ test('the Flutter instructions send Claude to the hot reload tool, not a rebuild
   expect(FLUTTER_INSTRUCTIONS).toContain('restart: true')
   expect(FLUTTER_INSTRUCTIONS).toContain('dart analyze')
 })
+
+test('the React Native and Flutter instructions cover the Android emulator; the Swift ones stay on iOS', () => {
+  expect(RN_INSTRUCTIONS).toContain('running in the iOS simulator or the Android emulator')
+  expect(RN_INSTRUCTIONS).toContain('npx expo run:android')
+  expect(RN_INSTRUCTIONS).toContain('npx react-native run-android')
+  expect(FLUTTER_INSTRUCTIONS).toContain('running in the iOS simulator or the Android emulator')
+  expect(INSTRUCTIONS).toContain('was sent from the iOS app running in the simulator')
+  expect(INSTRUCTIONS).not.toContain('Android')
+})

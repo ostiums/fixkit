@@ -39,7 +39,7 @@ A prompt that ends with a line like
 [fix r1] WalletCard › Text · src/WalletCard.tsx:18 · used at App.tsx:31 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
 [fix r2] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · .fixkit/reports/r2.png
 
-was sent from the React Native app running in the iOS simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the components that rendered it, innermost last; the file and line where its JSX is written; where the components around it are used; what accessibility says it is (its type, label, value, #testID, the control around it and the labels beside it in the same row); and a screenshot with the element outlined in red, or a red ring where the finger was.
+was sent from the React Native app running in the iOS simulator or the Android emulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the components that rendered it, innermost last; the file and line where its JSX is written; where the components around it are used; what accessibility says it is (its type, label, value, #testID, the control around it and the labels beside it in the same row); and a screenshot with the element outlined in red, or a red ring where the finger was.
 
 When a prompt carries that line:
 - Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
@@ -47,7 +47,7 @@ When a prompt carries that line:
 - Without one, find the element by searching the app's .tsx, .ts, .jsx and .js sources for its label, its testID and the labels beside it; a label made from data (an amount, a date) is found through the component that formats it, so search the neighbouring fixed labels first.
 - Make the smallest change that does what was asked. Do not refactor.
 - Open the screenshot only when the text and the code leave the request unclear.
-- Save the change and do not rebuild: Metro's Fast Refresh puts it on screen, which counts the report as fixed. Rebuild only when the change touches native code or native configuration, with the project's own command (npx expo run:ios, npx react-native run-ios).
+- Save the change and do not rebuild: Metro's Fast Refresh puts it on screen, which counts the report as fixed. Rebuild only when the change touches native code or native configuration, with the project's own command (npx expo run:ios or npx expo run:android, npx react-native run-ios or npx react-native run-android).
 - Answer in one or two sentences: what was wrong and what changed.`
 
 /**
@@ -63,7 +63,7 @@ A prompt that ends with a line like
 [fix r1] ProfileHeader › Text · lib/profile_header.dart:24 · used at lib/home.dart:31 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
 [fix r2] StaticText "+€4,650.00" near "Northwind GmbH", "Salary, September" · .fixkit/reports/r2.png
 
-was sent from the Flutter app running in the iOS simulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the app's widget around it and the widget itself; the file and line where that widget is constructed; where the widgets around it are used; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); and a screenshot with the element outlined in red, or a red ring where the finger was.
+was sent from the Flutter app running in the iOS simulator or the Android emulator by the fixkit mod: someone long-pressed an element and typed the text above that line. The line holds the report's id and what is known about the element: the app's widget around it and the widget itself; the file and line where that widget is constructed; where the widgets around it are used; what accessibility says it is (its type, label, value, the control around it and the labels beside it in the same row); and a screenshot with the element outlined in red, or a red ring where the finger was.
 
 When a prompt carries that line:
 - Treat the text above it as the request. It may be a bug ("button is shifted") or a change ("make this green").
