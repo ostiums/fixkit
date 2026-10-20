@@ -1,5 +1,5 @@
 import 'package:fixkit/fixkit.dart';
-import 'package:fixkit/src/host.dart' show runsOnIOS;
+import 'package:fixkit/src/host.dart' show runsOnDevice;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -59,13 +59,46 @@ void main() {
     expect(find.byType(EditableText), findsNothing);
   }, variant: iOS);
 
-  testWidgets('off iOS the host is its child alone', (tester) async {
+  testWidgets('on Android a long press opens the composer too', (tester) async {
+    await tester.pumpWidget(app());
+    await tester.longPress(find.text('Send'));
+    await tester.pump();
+
+    expect(find.byType(EditableText), findsOneWidget);
+    expect(longPresses, 0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('on a desktop the host is its child alone', (tester) async {
     await tester.pumpWidget(app());
     await tester.longPress(find.text('Send'));
     await tester.pump();
 
     expect(find.byType(EditableText), findsNothing);
     expect(longPresses, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets("Android's back button closes the composer, not the app's screen; then it pops the screen", (tester) async {
+    final navigator = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(
+      FixKitHost(
+        child: MaterialApp(navigatorKey: navigator, home: const Scaffold(body: Text('Home'))),
+      ),
+    );
+    navigator.currentState!.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Center(child: Text('Card')))));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.text('Card'));
+    await tester.pump();
+    expect(find.byType(EditableText), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byType(EditableText), findsNothing);
+    expect(find.text('Card'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Card'), findsNothing);
+    expect(find.text('Home'), findsOneWidget);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('the keyboard the composer opens does not resize the app under it', (tester) async {
@@ -128,9 +161,10 @@ void main() {
     expect(pressed, 1);
   }, variant: iOS);
 
-  test('the host runs on iOS and under flutter test, not on a Mac that only looks like iOS', () {
-    expect(runsOnIOS(isIOS: true, environment: const {}), isTrue);
-    expect(runsOnIOS(isIOS: false, environment: const {'FLUTTER_TEST': 'true'}), isTrue);
-    expect(runsOnIOS(isIOS: false, environment: const {}), isFalse);
+  test('the host runs on iOS, Android and under flutter test, not on a Mac that only looks like iOS', () {
+    expect(runsOnDevice(isIOS: true, isAndroid: false, environment: const {}), isTrue);
+    expect(runsOnDevice(isIOS: false, isAndroid: true, environment: const {}), isTrue);
+    expect(runsOnDevice(isIOS: false, isAndroid: false, environment: const {'FLUTTER_TEST': 'true'}), isTrue);
+    expect(runsOnDevice(isIOS: false, isAndroid: false, environment: const {}), isFalse);
   });
 }

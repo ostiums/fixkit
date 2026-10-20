@@ -40,10 +40,14 @@ class FixKitOverlay extends StatelessWidget {
   }
 }
 
+/// How far above the bottom of the screen the composer sits: above the keyboard, or with none above
+/// the screen's own bottom inset, Android's navigation bar or the home indicator.
+double composerBottom(double keyboard, double inset) => (keyboard > 0 ? keyboard : inset) + _panelGap;
+
 /// How far the host slides the app up so the composer, above the keyboard, does not cover the
 /// pressed element.
-double composerLift(Target target, Size screen, double keyboard) =>
-    liftFor(target.element?.frame?.bottom ?? target.touch.dy, screen.height - keyboard - _panelGap - _panelHeight);
+double composerLift(Target target, Size screen, double bottom) =>
+    liftFor(target.element?.frame?.bottom ?? target.touch.dy, screen.height - bottom - _panelHeight);
 
 /// The pressed element outlined in red, or a red ring where the finger was.
 class _Outline extends StatelessWidget {
@@ -105,9 +109,9 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
     final session = widget.session;
     final target = widget.target;
     final size = MediaQuery.sizeOf(context);
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final bottom = composerBottom(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.paddingOf(context).bottom);
     final frame = target.element?.frame;
-    final lift = composerLift(target, size, keyboard);
+    final lift = composerLift(target, size, bottom);
     final lit = spotlight(frame, target.touch, lift);
     void send() => session.send(lifted: lift > 0);
     final name = target.element?.name;
@@ -155,7 +159,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
           Positioned(
             left: 14,
             right: 14,
-            bottom: keyboard + _panelGap,
+            bottom: bottom,
             height: _panelHeight,
             // Takes the taps that miss its field and button, which would otherwise cancel.
             child: GestureDetector(

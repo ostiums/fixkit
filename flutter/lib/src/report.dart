@@ -36,13 +36,26 @@ class Target {
 }
 
 /// The report as the receiver takes it. The receiver takes the screenshot with the outline drawn,
-/// and reads what accessibility says, from the simulator named, or the one booted on `os`.
-Map<String, Object> reportBody(Target target, String comment, {required String os, String? simulator}) {
+/// and reads what accessibility says, from the simulator named, or the one booted on `os`. On
+/// Android it finds the device by the app's `vmService`, which `flutter run` forwards, and reads
+/// the screen's pixels with `pixelRatio`.
+Map<String, Object> reportBody(
+  Target target,
+  String comment, {
+  required String os,
+  String? simulator,
+  String? platform,
+  double? pixelRatio,
+  String? vmService,
+}) {
   final element = target.element;
   final frame = element?.frame;
   return {
     'os': os,
     'simulator': ?simulator,
+    'platform': ?platform,
+    'pixelRatio': ?pixelRatio,
+    'vmService': ?vmService,
     'comment': comment,
     'screen': '',
     'touch': {'x': target.touch.dx.round(), 'y': target.touch.dy.round()},

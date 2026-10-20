@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 // Talks to the receiver the fixkit mod runs on this Mac. The simulator shares the Mac's loopback
-// interface, so no address has to be configured; `--dart-define=FIXKIT_PORT=…` picks another port.
+// interface, and the receiver has adb reverse its port on the Android emulator's, so no address
+// has to be configured; `--dart-define=FIXKIT_PORT=…` picks another port.
 const _port = String.fromEnvironment('FIXKIT_PORT', defaultValue: '4747');
 
 /// The receiver's answer about a report: its id, where the agent is with it, and the agent's name.
@@ -63,8 +64,14 @@ class Client {
       _status(await _call('GET', '/status?id=${Uri.encodeQueryComponent(id)}', timeout: const Duration(seconds: 3)));
 
   /// Says the app is up with its latest code, and where its VM service is, which the receiver hot
-  /// reloads it through; answers the report the agent is working on, else the newest.
-  Future<ReportStatus> launched(String? vmService) async => _status(
-    await _call('POST', '/launched', body: {'vmService': ?vmService}, timeout: const Duration(seconds: 3)),
+  /// reloads it through: on `android` the device's address, which the receiver finds the Mac's
+  /// forward to. Answers the report the agent is working on, else the newest.
+  Future<ReportStatus> launched(String? vmService, {bool android = false}) async => _status(
+    await _call(
+      'POST',
+      '/launched',
+      body: {'vmService': ?vmService, if (android) 'platform': 'android'},
+      timeout: const Duration(seconds: 3),
+    ),
   );
 }

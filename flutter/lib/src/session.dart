@@ -92,9 +92,7 @@ class Session extends ChangeNotifier {
     await _frames(2);
     Receipt? receipt;
     try {
-      receipt = await _client.sendReport(
-        reportBody(pressed, comment, os: osVersion(Platform.operatingSystemVersion), simulator: simulatorIn(Directory.systemTemp.path)),
-      );
+      receipt = await _client.sendReport(await _body(pressed, comment));
     } catch (_) {}
     sending = false;
     outline = null;
@@ -107,13 +105,23 @@ class Session extends ChangeNotifier {
     unawaited(_follow(receipt.id));
   }
 
+  /// The report on this platform: the simulator it runs in on iOS; on Android what the receiver
+  /// finds the device by and reads its pixels with.
+  Future<Map<String, Object>> _body(Target pressed, String comment) async {
+    final os = osVersion(Platform.operatingSystemVersion);
+    if (!Platform.isAndroid) return reportBody(pressed, comment, os: os, simulator: simulatorIn(Directory.systemTemp.path));
+    final view = WidgetsBinding.instance.platformDispatcher.implicitView;
+    final vmService = (await developer.Service.getInfo()).serverUri?.toString();
+    return reportBody(pressed, comment, os: os, platform: 'android', pixelRatio: view?.devicePixelRatio, vmService: vmService);
+  }
+
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is
   /// how the mod learns a fix is on screen, and where its VM service is; then follows the report
   /// the agent is working on. A report already over shows nothing, so a later reload never repeats it.
   Future<void> announceLaunch() async {
     try {
       final info = await developer.Service.getInfo();
-      final answer = await _client.launched(info.serverUri?.toString());
+      final answer = await _client.launched(info.serverUri?.toString(), android: Platform.isAndroid);
       final id = answer.id;
       final status = answer.status;
       if (id != null && status != null && !isOver(status)) unawaited(_follow(id));
