@@ -85,6 +85,18 @@ test("the ids of Android's layouts name nothing: the content frame is no control
   assert.equal(elementAt(tree, { x: 50, y: 50 }).within, null)
 })
 
+test("in a window under the status bar, frames are measured from the app's content, as its touch is", () => {
+  const tree = parseHierarchy(
+    `<?xml version='1.0' ?><hierarchy rotation="0">${node(
+      { class: 'android.widget.FrameLayout', bounds: '[0,0][1080,2400]' },
+      node({ 'resource-id': 'android:id/content', bounds: '[0,63][1080,2400]' }, node({ text: 'Hi', bounds: '[0,103][200,143]' })),
+    )}</hierarchy>`,
+    1,
+  )
+
+  assert.equal(elementAt(tree, { x: 50, y: 60 })?.element.label, 'Hi')
+})
+
 // Dumped from react-native/example on a Pixel 8 emulator (2.625 pixels a point).
 const rnScreen = parseHierarchy(readFileSync(new URL('./fixtures/android-rn.xml', import.meta.url), 'utf8'), 2.625)
 

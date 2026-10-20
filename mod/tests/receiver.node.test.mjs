@@ -261,6 +261,17 @@ test('an iOS report never asks adb for a screenshot or the screen', async () => 
   assert.ok(!asked.some(call => call.includes('screencap') || call.includes('uiautomator')))
 })
 
+test('a reload of a Flutter app on Android that sent no URL answers with an error and keeps the receiver up', async t => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), forwards: '' })
+  const receiver = await startReceiver({ env: { FIXKIT_ADB: adb } })
+  t.after(receiver.stop)
+
+  await receiver.post('/launched', { vmService: 'not a url', platform: 'android' })
+  assert.equal((await receiver.post('/reload', {})).ok, false)
+  assert.equal((await receiver.get('/status')).id, null)
+})
+
 test("a reload of a Flutter app on Android without its port forwarded finds it not running", async t => {
   const dir = adbFolder()
   const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), forwards: '' })
