@@ -25,12 +25,12 @@
 FixKit turns a long press in the iOS simulator into a prompt for your coding agent. The report carries your words, a screenshot with the element outlined, and the code behind the element: a SwiftUI file and line, a UIKit property, a React Native component or a Flutter widget. The agent fixes the code and puts the change on screen, and a banner in the app follows the report until the fix is live.
 
 > [!TIP]
-> No app at hand? This repository holds **Tally**, a SwiftUI wallet with four seeded UI bugs. [Try FixKit on it](#try-it-on-tally) with two commands.
+> To try FixKit without an app of your own, use **Tally**, the SwiftUI wallet in this repository with four seeded UI bugs. [It takes two commands](#try-it-on-tally).
 
 ## Overview
 
 1. **Long press** an element and type what's wrong.
-2. **The report lands** in your agent session: your words, the element, a screenshot.
+2. **The report lands** in your agent session as a prompt.
 3. **The agent fixes the code** and puts it on screen: a rebuild for SwiftUI and UIKit, Fast Refresh for React Native, hot reload for Flutter.
 
 FixKit has two halves:
@@ -40,12 +40,12 @@ FixKit has two halves:
 
 ### Features
 
-- **One setup for four UI stacks:** SwiftUI, UIKit, React Native (Expo Go included) and Flutter, with Claude Code or Codex.
-- **Points at the code, not only the pixels.** SwiftUI views report their own file and line with no markup; UIKit views are named after the property that holds them.
-- **Leaves the app alone.** The long press runs alongside the app's gestures: the pressed button doesn't fire, and scroll views keep scrolling.
-- **Clean screenshots.** The composer and banners stay out of the screenshot sent to the agent.
-- **Follows each fix to the screen.** The app's banner and the Fix queue pane take a report from queued through fixing and rebuilding to live, once the app relaunches or reloads.
-- **Nothing in release builds.** The Swift package compiles to nothing outside Debug, and `FixKitHost` returns the app untouched outside debug mode in React Native and Flutter.
+- Works with SwiftUI, UIKit, React Native (Expo Go included) and Flutter apps, and with Claude Code or Codex.
+- SwiftUI views report their own file and line with no markup; UIKit views are named after the property that holds them.
+- The long press runs alongside the app's gestures: the pressed button doesn't fire, and scroll views keep scrolling.
+- The composer and banners stay out of the screenshot the agent gets.
+- The app's banner and the Fix queue pane follow each report from queued through fixing and rebuilding to live.
+- Release builds leave FixKit out.
 
 ## Getting started
 
