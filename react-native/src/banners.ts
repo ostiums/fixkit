@@ -6,15 +6,8 @@ export const agentOf = (answer: { agent?: string }) => answer.agent ?? 'Claude C
 
 export const sentTo = (agent: string): Banner => ({ text: `Sent to ${agent}`, glyph: null, working: true })
 
-/** The receiver did not answer: the agent is the one last heard from, if any. */
-export const offline = (agent: string | null): Banner => ({
-  text: agent === null ? 'No agent is listening' : `${agent} is not listening`,
-  glyph: '!',
-  working: false,
-})
-
-/** The composer's placeholder: the agent last heard from, if any. */
-export const composerHint = (agent: string | null) => (agent === null ? 'What needs fixing here?' : `What should ${agent} fix here?`)
+/** The receiver did not answer, so it cannot say which agent it works for. */
+export const OFFLINE: Banner = { text: 'FixKit is not listening', glyph: '!', working: false }
 
 /** The banner for a report's status as the receiver gives it. */
 export function bannerFor(status: string, agent: string): Banner {

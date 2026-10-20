@@ -1,6 +1,6 @@
 import { Keyboard, Platform } from 'react-native'
 
-import { agentOf, bannerFor, offline, sentTo, type Banner } from './banners'
+import { OFFLINE, agentOf, bannerFor, sentTo, type Banner } from './banners'
 import { launched, sendReport, statusOf, type Receipt, type ReportStatus } from './client'
 import { reportBody, type Target } from './report'
 
@@ -16,11 +16,9 @@ export type SessionState = {
   sending: boolean
   /** How far the app is slid up so the composer does not cover the pressed element. */
   lift: number
-  /** The agent the receiver last named; an offline receiver cannot say. */
-  agent: string | null
 }
 
-let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0, agent: null }
+let state: SessionState = { target: null, canSend: false, banner: null, outline: null, sending: false, lift: 0 }
 // The comment being typed, out of the state: a keystroke re-renders nothing unless `canSend` changes.
 let draft = ''
 const listeners = new Set<() => void>()
@@ -28,13 +26,6 @@ const listeners = new Set<() => void>()
 function set(change: Partial<SessionState>) {
   state = { ...state, ...change }
   listeners.forEach(listener => listener())
-}
-
-/** Keeps the agent an answer names, and returns it. */
-function hear(answer: { agent?: string }) {
-  const agent = agentOf(answer)
-  if (agent !== state.agent) set({ agent })
-  return agent
 }
 
 export const store = {
@@ -96,10 +87,10 @@ export async function send() {
   } catch {}
   set({ sending: false, outline: null })
   if (receipt === null) {
-    show(offline(state.agent), 4000)
+    show(OFFLINE, 4000)
     return
   }
-  show(sentTo(hear(receipt)))
+  show(sentTo(agentOf(receipt)))
   void follow(receipt.id)
 }
 
@@ -111,9 +102,7 @@ export async function send() {
  */
 export async function announceLaunch(stack: string | null = null) {
   try {
-    const answer = await launched(stack)
-    hear(answer)
-    const { id, status } = answer
+    const { id, status } = await launched(stack)
     if (id && status && !isOver(status)) void follow(id)
   } catch {}
 }
@@ -128,7 +117,7 @@ async function follow(id: string) {
     } catch {}
     if (mine !== ticket || !answer?.status) continue
     const status = answer.status
-    const agent = hear(answer)
+    const agent = agentOf(answer)
     if (isOver(status)) {
       ticket++
       show(bannerFor(status, agent), 4000)

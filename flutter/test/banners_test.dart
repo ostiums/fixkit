@@ -16,15 +16,9 @@ void main() {
     expect(sentTo('Codex').working, isTrue);
   });
 
-  test('not listening names the agent last heard from, else none', () {
-    expect(offlineFor('Codex').text, 'Codex is not listening');
-    expect(offlineFor(null).text, 'No agent is listening');
-    expect(offlineFor(null).glyph, '!');
-  });
-
-  test('the composer asks for the agent last heard from, else for no one', () {
-    expect(composerHint('Codex'), 'What should Codex fix here?');
-    expect(composerHint(null), 'What needs fixing here?');
+  test('a receiver that does not answer cannot name its agent', () {
+    expect(offline.text, 'FixKit is not listening');
+    expect(offline.glyph, '!');
   });
 
   test('a report is over once live or stopped', () {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Animated, Keyboard, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 
-import { composerHint, type Banner } from './banners'
+import type { Banner } from './banners'
 import { around, dimAround, liftFor, spotlight } from './layout'
 import type { Target } from './report'
 import { cancel, send, setDraft, setLift, type SessionState } from './session'
@@ -16,7 +16,7 @@ export function Overlay({ state }: { state: SessionState }) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {state.outline && <Outline target={state.outline} />}
-      {state.target && <Composer target={state.target} canSend={state.canSend} lift={state.lift} agent={state.agent} />}
+      {state.target && <Composer target={state.target} canSend={state.canSend} lift={state.lift} />}
       {state.banner && <BannerView banner={state.banner} />}
     </View>
   )
@@ -31,7 +31,7 @@ function Outline({ target }: { target: Target }) {
 }
 
 /** The dimmed screen with the pressed element lit, and the comment field above the keyboard. */
-function Composer({ target, canSend, lift, agent }: { target: Target; canSend: boolean; lift: number; agent: string | null }) {
+function Composer({ target, canSend, lift }: { target: Target; canSend: boolean; lift: number }) {
   const { width, height } = useWindowDimensions()
   const [keyboard, setKeyboard] = useState(0)
   const [labelWidth, setLabelWidth] = useState(0)
@@ -94,7 +94,7 @@ function Composer({ target, canSend, lift, agent }: { target: Target; canSend: b
           autoFocus
           onChangeText={setDraft}
           onSubmitEditing={() => void send()}
-          placeholder={composerHint(agent)}
+          placeholder="What should be fixed here?"
           placeholderTextColor="rgba(255,255,255,0.55)"
           returnKeyType="send"
           autoCorrect={false}
