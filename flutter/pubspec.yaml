@@ -1,8 +1,8 @@
 name: fixkit
-description: Long press any widget of a debug build in the iOS simulator, type what is wrong, and the report goes to the Claude Code or Codex session on your Mac through the fixkit mod.
+description: Long press any widget of a debug build in the iOS simulator or the Android emulator, type what is wrong, and the report goes to the Claude Code or Codex session on your Mac through the fixkit mod.
 version: 0.1.0
 repository: https://github.com/ostiums/fixkit/tree/main/flutter
-topics: [debugging, developer-tools, ios]
+topics: [debugging, developer-tools, ios, android]
 
 environment:
   sdk: ^3.9.0

@@ -3,12 +3,13 @@
 
 # FixKit
 
-**Long press anything in your iOS, React Native or Flutter app in the simulator, say what's wrong, and Claude Code or Codex fixes it.**
+**Long press anything in your iOS, React Native or Flutter app in the simulator or the Android emulator, say what's wrong, and Claude Code or Codex fixes it.**
 
 ![iOS 17+](https://img.shields.io/badge/iOS-17%2B-blue?style=flat-square&logo=apple)
 ![Swift 6](https://img.shields.io/badge/Swift-6-F05138?style=flat-square&logo=swift&logoColor=white)
 ![React Native 0.80+](https://img.shields.io/badge/React_Native-0.80%2B-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Flutter 3.35+](https://img.shields.io/badge/Flutter-3.35%2B-02569B?style=flat-square&logo=flutter)
+![Android emulator](https://img.shields.io/badge/Android-emulator-3DDC84?style=flat-square&logo=android&logoColor=white)
 <br>
 ![Claude Code 2.1.287+](https://img.shields.io/badge/Claude_Code-2.1.287%2B-D97757?style=flat-square)
 ![Codex CLI 0.159+](https://img.shields.io/badge/Codex_CLI-0.159%2B-black?style=flat-square)
@@ -22,7 +23,7 @@
 
 </div>
 
-FixKit turns a long press in the iOS simulator into a prompt for your coding agent. The report carries your words, a screenshot with the element outlined, and the code behind the element: a SwiftUI file and line, a UIKit property, a React Native component or a Flutter widget. The agent fixes the code and puts the change on screen, and a banner in the app follows the report until the fix is live.
+FixKit turns a long press in the iOS simulator, or in the Android emulator for React Native and Flutter apps, into a prompt for your coding agent. The report carries your words, a screenshot with the element outlined, and the code behind the element: a SwiftUI file and line, a UIKit property, a React Native component or a Flutter widget. The agent fixes the code and puts the change on screen, and a banner in the app follows the report until the fix is live.
 
 > [!TIP]
 > To try FixKit without an app of your own, use **Tally**, the SwiftUI wallet in this repository with four seeded UI bugs. [It takes two commands](#try-it-on-tally).
@@ -40,7 +41,7 @@ FixKit has two halves:
 
 ### Features
 
-- Works with SwiftUI, UIKit, React Native (Expo Go included) and Flutter apps, and with Claude Code or Codex.
+- Works with SwiftUI, UIKit, React Native (Expo Go included) and Flutter apps, and with Claude Code or Codex. React Native and Flutter apps work in the Android emulator too.
 - SwiftUI views report their own file and line with no markup; UIKit views are named after the property that holds them.
 - The long press runs alongside the app's gestures: the pressed button doesn't fire, and scroll views keep scrolling.
 - The composer and banners stay out of the screenshot the agent gets.
@@ -54,13 +55,14 @@ FixKit has two halves:
 - [Claude Code](https://github.com/anthropics/claude-code) 2.1.287+ or [Codex CLI](https://github.com/openai/codex) 0.159+
 - [Node.js](https://nodejs.org) 18.2+ (22+ for Flutter)
 - Xcode with the iOS simulator; for SwiftUI and UIKit apps, Xcode 16.3+ and iOS 17+
+- For React Native and Flutter on Android: the Android emulator and the SDK's platform-tools (adb), both installed by Android Studio
 
 > [!NOTE]
-> FixKit works in the iOS simulator only: not on a device, and not on Android.
+> FixKit works in the iOS simulator and, for React Native and Flutter, in the Android emulator: not on a physical device.
 
 Recommended:
 
-- [AXe](https://github.com/cameroncooke/AXe) adds what accessibility says about the pressed element to every report: its type, label, value and the labels beside it. Without AXe, reports still name the code the app finds itself. FixKit looks for AXe in `FIXKIT_AXE`, then on `PATH` (`brew install cameroncooke/axe/axe`), then in the copy bundled with XcodeBuildMCP run through `npx`.
+- [AXe](https://github.com/cameroncooke/AXe) adds what accessibility says about the pressed element to every report: its type, label, value and the labels beside it. Without AXe, reports still name the code the app finds itself. FixKit looks for AXe in `FIXKIT_AXE`, then on `PATH` (`brew install cameroncooke/axe/axe`), then in the copy bundled with XcodeBuildMCP run through `npx`. On Android the receiver reads the same through adb, with nothing more to install.
 - [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP) rebuilds and relaunches a SwiftUI or UIKit app in one call.
 
 ### 1. Install the plugin
@@ -173,7 +175,7 @@ void main() => runApp(const FixKitHost(child: MyApp()));
 
 With Claude Code:
 
-1. Start `claude` in the project's root and run a debug build in the simulator.
+1. Start `claude` in the project's root and run a debug build in the simulator or the emulator.
 2. Long press an element, type what's wrong, press Return.
 
 The **Fix queue** pane lists reports and their status. It opens by itself in terminals 144+ columns wide, or with `/fix-queue`.
@@ -246,11 +248,11 @@ The `fixkit` npm package is TypeScript with no native code, so it works in Expo 
 
 | Project | Command |
 | --- | --- |
-| Expo Go | `npx expo start --ios` |
-| Expo development build | `npx expo run:ios` once, then `npx expo start --ios` |
-| React Native CLI | `npx react-native run-ios` |
+| Expo Go | `npx expo start --ios` or `--android` |
+| Expo development build | `npx expo run:ios` or `npx expo run:android` once, then `npx expo start` |
+| React Native CLI | `npx react-native run-ios` or `npx react-native run-android` |
 
-Keep Metro running: fixes go live through Fast Refresh, with no rebuild. Native changes (Podfile, `Info.plist`, config plugins) are rebuilt with the command above.
+Keep Metro running: fixes go live through Fast Refresh, with no rebuild. Native changes (Podfile, `Info.plist`, `AndroidManifest.xml`, config plugins) are rebuilt with the command above.
 
 Reports name the components, the JSX line and where the component is used:
 
@@ -261,12 +263,13 @@ Reports name the components, the JSX line and where the component is used:
 - With AXe, `testID`s appear as `#id`.
 - **The pressed button stays still:** `Pressable`, `Touchable*`, `Button` and pressable `Text` don't fire while FixKit holds a press. FixKit wraps React Native's private `Pressability` for that, so Metro warns once about a deep import. Gesture Handler buttons aren't held.
 - **Lines may be a few off** after Fast Refresh changes a file, until the next reload.
-- **Not covered yet:** native `Modal`s and natively presented screens, nested `<FixKitHost>`, Android.
+- **Android's back button** closes the composer. With the keyboard up, the first press hides the keyboard and keeps what you typed.
+- **Not covered yet:** native `Modal`s and natively presented screens, nested `<FixKitHost>`.
 
 Try it on the example app:
 
 ```bash
-cd react-native/example && npm install && npx expo start --ios
+cd react-native/example && npm install && npx expo start --ios    # or: npx expo run:android
 claude --plugin-dir ../../mod    # in the same folder
 ```
 
@@ -276,7 +279,7 @@ The `fixkit` Dart package is Dart only, with no native code and no dependency be
 
 ![A long press on the wallet balance sends "Make the balance green" to Claude Code; Claude changes the colour in wallet_card.dart, calls hot_reload, and the balance turns green under the banner "Fixed by Claude Code"](docs/demo-flutter.gif)
 
-Run the app with `flutter run` in the iOS simulator, from a terminal, VS Code or Android Studio.
+Run the app with `flutter run` in the iOS simulator or the Android emulator, from a terminal, VS Code or Android Studio.
 
 Saving a file does not hot reload a Flutter app, so the agent asks for it: in Claude Code with the mod's `hot_reload` tool, in Codex with a POST to the receiver's `/reload`. Both go through the VM service `flutter run` serves, the one DevTools' reload button calls. A compile error comes back to the agent; for a change hot reload can't apply (`initState`, globals, `main`), the agent hot restarts the app instead.
 
@@ -289,14 +292,15 @@ Reports name the app's widget around the pressed one, the line of its constructo
 - **Widgets from Flutter and pub.dev packages are skipped** for the app's own widget around them.
 - **The pressed button stays still:** FixKit's long press wins Flutter's gesture arena at 450 ms, before a widget's own 500 ms long press, so the widget under the finger neither taps nor long-presses. An app's long press shorter than 450 ms wins over FixKit's.
 - **Lines stay current:** a hot reload rebuilds the widgets from the new code.
-- **Not covered yet:** a widget built in a helper method points into that method, not at its caller; Android.
+- **Android's back button** closes the composer, on the app's first screen too.
+- **Not covered yet:** a widget built in a helper method points into that method, not at its caller.
 
 Try it on the example app:
 
 ```bash
 cd flutter/example
 claude --plugin-dir ../../mod    # in this folder
-flutter run                      # in a second terminal, with the iOS simulator booted
+flutter run                      # in a second terminal, with the iOS simulator or an Android emulator booted
 ```
 
 ## Codex
@@ -313,18 +317,19 @@ With Codex, hooks start the receiver and report progress in place of the mod. Co
 
 ```
 app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──AXe──▶ simulator
-      ▲                               │
+      ▲                               │  └─────adb──▶ emulator
       │ GET /status, POST /launched   ▼
       └────────── statuses ◀── Claude Code mod  or  Codex hooks
 ```
 
 - **The long press** takes 0.5 s in SwiftUI and UIKit, 450 ms in React Native and Flutter. It runs alongside the app's gestures. In SwiftUI and UIKit, at the default Haptic Touch speed, it also wins over a view's `.contextMenu`: the menu is cancelled before it opens.
 - **The composer and banners** stay out of screenshots. In SwiftUI and UIKit they live in a separate window above the app and cover sheets; in React Native and Flutter they are drawn over the app and hidden before the screenshot.
-- **The receiver** asks AXe for the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`.
+- **The receiver** asks AXe for the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`. On Android it reads the tree with `uiautomator dump` and takes the screenshot with `screencap`, both through adb.
+- **On Android** the receiver keeps `adb reverse` on its port for every device adb lists, checked every 2 s, so the app reaches `127.0.0.1:4747` as it does in the simulator. FixKit looks for adb in `FIXKIT_ADB`, `ANDROID_HOME`, `ANDROID_SDK_ROOT`, on `PATH`, then in `~/Library/Android/sdk`.
 - **In Claude Code**, the mod submits the report as a prompt and tracks its turn. **In Codex**, the receiver queues the prompt with `codex queue`, and hooks report the turn's progress.
 - **"Live"** means the app launched or reloaded while the agent worked: a relaunch from XcodeBuildMCP, `xcodebuild` or Xcode's Run, a Fast Refresh, a Flutter hot reload or restart.
 - **One session at a time:** the newest session takes port 4747.
-- **Release builds** leave FixKit out: the Swift package compiles to nothing whatever flags the app sets, and `FixKitHost` in React Native and Flutter returns the app untouched outside debug mode and off iOS.
+- **Release builds** leave FixKit out: the Swift package compiles to nothing whatever flags the app sets, and `FixKitHost` in React Native and Flutter returns the app untouched outside debug mode and anywhere but iOS and Android.
 
 ## Try it on Tally
 
@@ -381,6 +386,10 @@ Every view in a builder comes back wrapped, so a builder that must return one co
 **A SwiftUI view is named where it is used, not where it is written.** Its body has an explicit `return`, or it comes from another module. In a Tuist or multi-module project, add FixKit and `import FixKit` to that module too (see [Using Tuist](#in-a-swiftui-or-uikit-app)).
 
 **React Native reports come without a screenshot.** With several simulators of the same iOS version booted, the receiver can't tell which one runs the app. Boot one simulator per iOS version.
+
+**Android reports come without a screenshot.** With several emulators online, the receiver takes the one on the app's API level. A React Native app sends its level; a Flutter app has none to send without native code, so run one emulator at a time.
+
+**An Android app shows "Claude Code is not listening"** while the agent runs. The app reaches the receiver through adb, and the Fix queue pane says when there is none: install the SDK's platform-tools, or point `FIXKIT_ADB` at adb.
 
 **A React Native or Flutter app is treated as a native one,** or Codex doesn't start FixKit. Start the agent in the folder with `package.json` or `pubspec.yaml`, not above it.
 
