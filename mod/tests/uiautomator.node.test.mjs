@@ -1,5 +1,6 @@
 // node --test mod/tests/*.node.test.mjs: Android's accessibility tree, as uiautomator dumps it, read by the lookup.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 
 import { elementAt } from '../server/inspect.mjs'
@@ -66,6 +67,31 @@ test('the lookup finds a nested text and the labels in its row', () => {
 
   assert.deepEqual([found.element.type, found.element.label], ['TextView', '+€4,650.00'])
   assert.deepEqual(found.nearby, ['Northwind GmbH'])
+})
+
+test("Android's own views are not named by their ids: the content frame is no control around anything", () => {
+  const tree = parseHierarchy(
+    dump(node({ 'resource-id': 'android:id/content', bounds: '[0,0][1080,2400]' }, node({ text: 'Hi', bounds: '[0,0][100,100]' }))),
+    1,
+  )
+
+  assert.equal(tree[0].children[0].AXUniqueId, null)
+  assert.equal(elementAt(tree, { x: 50, y: 50 }).within, null)
+})
+
+// Dumped from flutter/example on a Pixel 8 emulator (2.625 pixels a point), the banner of a queued report on screen.
+const flutterScreen = parseHierarchy(readFileSync(new URL('./fixtures/android-flutter.xml', import.meta.url), 'utf8'), 2.625)
+
+test("a Flutter card's semantics name the balance pressed in it, with nothing of Android's around it", () => {
+  const found = elementAt(flutterScreen, { x: 131, y: 208 })
+
+  assert.equal(found.element.type, 'View')
+  assert.ok(found.element.label.includes('€12,480.50'))
+  assert.equal(found.within, null)
+})
+
+test("FixKit's banner on a Flutter screen is never what was pressed", () => {
+  assert.notEqual(elementAt(flutterScreen, { x: 200, y: 75 })?.element.label, 'Queued in Claude Code')
 })
 
 test('a failed dump, a tree with nothing named and the line adb adds after it', () => {

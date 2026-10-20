@@ -56,7 +56,12 @@ test("a Flutter app's VM service on the device is reached through the Mac's port
   const forwards = [{ serial: 'emulator-5554', host: 52361, device: 43123 }]
 
   assert.equal(macVmService('http://127.0.0.1:43123/abc=/', forwards), 'http://127.0.0.1:52361/abc=/')
-  assert.equal(macVmService('http://127.0.0.1:40000/abc=/', forwards), null)
+})
+
+test("DDS's address, which the app gives once flutter run attached it, is on the Mac already", () => {
+  const forwards = [{ serial: 'emulator-5554', host: 52361, device: 43123 }]
+
+  assert.equal(macVmService('http://127.0.0.1:56221/dds=/', forwards), 'http://127.0.0.1:56221/dds=/')
 })
 
 test('the only device online, without asking its API level', async () => {

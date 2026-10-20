@@ -65,13 +65,14 @@ export async function pickDevice(serials, { os, sdkOf }) {
 }
 
 /**
- * A Flutter app's VM service as the Mac reaches it: the app knows the device's port, which
- * `flutter run` forwards from one of the Mac's. Null when no forward leads there.
+ * A Flutter app's VM service as the Mac reaches it. Before `flutter run` attaches DDS the app
+ * knows the device's port, which `flutter run` forwards from one of the Mac's; after, the address
+ * it gives is DDS's, on the Mac already, and no forward leads there.
  */
 export function macVmService(vmService, forwards) {
   const url = new URL(vmService)
   const forward = forwards.find(one => String(one.device) === url.port)
-  if (!forward) return null
+  if (!forward) return vmService
   url.port = String(forward.host)
   return url.href
 }
