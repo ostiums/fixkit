@@ -1,5 +1,16 @@
 import type { Frame, Point } from './report'
 
+// Android's navigation bar, three buttons high: an edge-to-edge window does not keep clear of it and
+// React Native gives no inset for it. The gesture bar is lower.
+const ANDROID_NAVIGATION_BAR = 48
+// Between the composer and the keyboard, or the bottom of the screen.
+const COMPOSER_GAP = 10
+
+/** How far above the bottom of the screen the composer sits, with `keyboard` points of keyboard under it. */
+export function composerBottom(keyboard: number, os: string) {
+  return (keyboard > 0 || os !== 'android' ? keyboard : ANDROID_NAVIGATION_BAR) + COMPOSER_GAP
+}
+
 /** How far the app slides up so the pressed element stays 28 pt above the composer. */
 export function liftFor(elementBottom: number, composerTop: number) {
   return Math.max(0, elementBottom + 28 - composerTop)
