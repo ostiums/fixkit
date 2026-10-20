@@ -185,7 +185,7 @@ With Codex:
 3. Run a debug build, long press, type, press Return.
 
 > [!IMPORTANT]
-> Untrusted hooks don't run, and FixKit starts with the Codex session's first turn. Until both happen, the app shows "Claude Code is not listening". The other differences are under [Codex](#codex).
+> Untrusted hooks don't run, and FixKit starts with the Codex session's first turn. Until both happen, the app shows "FixKit is not listening". The other differences are under [Codex](#codex).
 
 For React Native and Flutter, start the agent in the folder with `package.json` or `pubspec.yaml`: that is how the plugin knows which stack the app uses.
 
@@ -303,7 +303,7 @@ flutter run                      # in a second terminal, with the iOS simulator 
 
 With Codex, hooks start the receiver and report progress in place of the mod. Compared with Claude Code:
 
-- **No pane.** Progress shows only in the app's banners, which say "Claude Code" with either agent. The log is in `$TMPDIR/fixkit-codex.log`.
+- **No pane.** Progress shows only in the app's banners, which name Codex: "Sent to Codex", "Fixed by Codex". The log is in `$TMPDIR/fixkit-codex.log`.
 - **Only in app projects:** a folder, or one above it up to the git root, with an Xcode project or workspace, a `Package.swift`, a React Native `package.json` or a Flutter `pubspec.yaml`. Elsewhere FixKit does nothing.
 - **Needs Codex's shared app-server**, the default. Sessions started with `codex --no-daemon` get no reports.
 - **Ending the session stops FixKit.** Reports already queued run when you resume, but without a banner.
@@ -368,7 +368,7 @@ Then run a server on `127.0.0.1:4748` that answers `GET /next` with one step as 
 
 ## Troubleshooting
 
-**The app shows "Claude Code is not listening".** No agent session holds the receiver. Start `claude` or `codex` in the project's root; in Codex, trust the plugin's hooks and send a first message. A session started with `codex --no-daemon` never receives reports.
+**The app shows "FixKit is not listening".** No agent session holds the receiver. Start `claude` or `codex` in the project's root; in Codex, trust the plugin's hooks and send a first message. A session started with `codex --no-daemon` never receives reports.
 
 **A SwiftUI builder stops compiling in Debug** with an error like this one:
 
