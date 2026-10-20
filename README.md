@@ -12,23 +12,23 @@
 
 1. **Long press** an element and type what's wrong.
 2. **The report lands** in your agent session: your words, the element, a screenshot.
-3. **The agent fixes the code** and relaunches the app. A banner tracks it: queued → fixing → rebuilding → live.
+3. **The agent fixes the code** and puts it on screen: a rebuild for SwiftUI and UIKit, Fast Refresh for React Native, hot reload for Flutter. A banner in the app follows the report until the fix is live.
 
 FixKit has two parts:
 
 - **In the app:** a debug-only library that sends reports. The **FixKit** Swift package for SwiftUI and UIKit, the **fixkit** npm package for React Native, the **fixkit** Dart package for Flutter.
-- **In the agent:** the **fixkit** plugin for Claude Code and Codex. Its local server, the receiver (`127.0.0.1:4747`), turns each report into a prompt.
+- **In the agent:** the **fixkit** plugin: a mod with a Fix queue pane in Claude Code, hooks in Codex. Its local server, the receiver (`127.0.0.1:4747`), turns each report into a prompt.
 
 ## Quick start
 
-For a SwiftUI or UIKit app with Claude Code. With Codex as the agent, swap in the steps from [Codex](#codex). For a React Native or Flutter app, see [React Native](#react-native) or [Flutter](#flutter).
+These steps are for a SwiftUI or UIKit app with Claude Code. With Codex, steps 1 and 5 change: see [Codex](#codex). For React Native or Flutter, do steps 1 and 2, then go to [React Native](#react-native) or [Flutter](#flutter).
 
-**You need:** Claude Code 2.1.287+ or Codex CLI 0.159+, Node.js 18.2+, Xcode 16.3+ and an iOS 17+ simulator. FixKit works in the simulator only.
+**You need:** Claude Code 2.1.287+ or Codex CLI 0.159+, Node.js 18.2+ (22+ for Flutter) and Xcode with the iOS simulator (Xcode 16.3+ and iOS 17+ for SwiftUI and UIKit apps). FixKit works in the simulator only.
 
 **Recommended:**
 
-- [AXe](https://github.com/cameroncooke/AXe) names the pressed element. If XcodeBuildMCP runs through `npx`, FixKit uses the AXe bundled with it; otherwise `brew install cameroncooke/axe/axe`, or point `FIXKIT_AXE` at a copy. Without AXe, reports carry only the screenshot and the touch point.
-- [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP) rebuilds and relaunches in one call.
+- [AXe](https://github.com/cameroncooke/AXe) adds what accessibility says about the pressed element to every report: its type, label, value and the labels beside it. Without AXe, reports still name the code the app finds itself: SwiftUI lines, UIKit properties, React Native components and Flutter widgets. FixKit looks for it in `FIXKIT_AXE`, then on `PATH` (`brew install cameroncooke/axe/axe`), then in the copy bundled with XcodeBuildMCP run through `npx`.
+- [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP) rebuilds and relaunches a SwiftUI or UIKit app in one call.
 
 ### 1. Install the plugin
 
@@ -37,7 +37,16 @@ claude plugin marketplace add ostiums/fixkit
 claude plugin install fixkit@fixkit
 ```
 
-### 2. Add the package
+### 2. Prepare the project
+
+1. Add `.fixkit/` to `.gitignore`: reports and screenshots go there.
+2. With Claude Code, let it read screenshots without asking, in `.claude/settings.json`:
+
+   ```json
+   { "permissions": { "allow": ["Read(./.fixkit/**)"] } }
+   ```
+
+### 3. Add the package
 
 Xcode: File › Add Package Dependencies › `https://github.com/ostiums/fixkit`, rule **Branch: main**. Or in `Package.swift`:
 
@@ -45,7 +54,7 @@ Xcode: File › Add Package Dependencies › `https://github.com/ostiums/fixkit`
 .package(url: "https://github.com/ostiums/fixkit", branch: "main")
 ```
 
-**Tuist:** add FixKit to every target with SwiftUI views, not only the app, and `import FixKit` in it: a view in a module without it is named where it is used. With FixKit in `Tuist/Package.swift` and more than one dynamic framework depending on it, make FixKit a framework too, so the app holds one copy of it:
+**Tuist:** add FixKit to every target with SwiftUI views, not only the app, and `import FixKit` in it; otherwise a view from that module is named where it is used, not where it is written. When more than one dynamic framework depends on FixKit, make it a framework too, so the app holds one copy:
 
 ```swift
 // Tuist/Package.swift
@@ -56,9 +65,9 @@ let packageSettings = PackageSettings(productTypes: ["FixKit": .framework])
 #endif
 ```
 
-Left static, each framework holds its own copy, and the views of all but one are named where they are used. Tuist warns about it: "Target 'FixKit' has been linked from target 'A' and target 'B', it is a static product so may introduce unwanted side effects."
+Left static, each framework holds its own copy, the views of all but one are named where they are used, and Tuist warns: "Target 'FixKit' has been linked from target 'A' and target 'B', it is a static product so may introduce unwanted side effects."
 
-### 3. Add one line to the app
+### 4. Add one line to the app
 
 ```swift
 import FixKit
@@ -74,43 +83,38 @@ window.makeKeyAndVisible()
 window.fixKitHost()
 ```
 
-### 4. Run it
+### 5. Run it
 
-1. Add `.fixkit/` to `.gitignore`: reports and screenshots go there.
-2. Let Claude read screenshots without asking, in `.claude/settings.json`:
-
-   ```json
-   { "permissions": { "allow": ["Read(./.fixkit/**)"] } }
-   ```
-
-3. Start `claude` in the project's root and run a debug build in the simulator.
-4. Long press an element, type what's wrong, press Return.
+1. Start `claude` in the project's root and run a debug build in the simulator.
+2. Long press an element, type what's wrong, press Return.
 
 The **Fix queue** pane lists reports and their status. It opens by itself in terminals 144+ columns wide, or with `/fix-queue`.
 
 ## Codex
 
-Same package, same line in the app, same `.fixkit/` in `.gitignore`. Only the plugin setup differs:
+Steps 2 to 4 stay the same. Step 1, install the plugin:
 
 ```bash
 codex plugin marketplace add ostiums/fixkit
 codex plugin add fixkit@fixkit
 ```
 
+Step 5, run it:
+
 1. Start `codex` in the project's root and **trust the plugin's hooks** when asked (or later in `/hooks`). Untrusted hooks don't run.
-2. **Send any message before the first long press.** FixKit starts with the session's first turn; until then the app shows "not listening". To skip this, start with a message: `codex "FixKit"`. A resumed session works the same way.
+2. **Send any message before the first long press.** FixKit starts with the session's first turn; until then the app shows "Claude Code is not listening". To skip this, start with a message: `codex "FixKit"`. A resumed session works the same way.
 3. Run a debug build, long press, type, press Return.
 
 Differences from Claude Code:
 
-- **No pane.** Progress shows only in the app's banners (which say "Claude Code" with either agent). Log: `$TMPDIR/fixkit-codex.log`.
-- **Only in app projects:** a folder, or one above it up to the git root, with an Xcode project, a `Package.swift`, a React Native `package.json` or a Flutter `pubspec.yaml`. Elsewhere FixKit does nothing.
+- **No pane.** Progress shows only in the app's banners, which say "Claude Code" with either agent. Log: `$TMPDIR/fixkit-codex.log`.
+- **Only in app projects:** a folder, or one above it up to the git root, with an Xcode project or workspace, a `Package.swift`, a React Native `package.json` or a Flutter `pubspec.yaml`. Elsewhere FixKit does nothing.
 - **Needs Codex's shared app-server** (the default). Sessions started with `codex --no-daemon` get no reports.
 - **Ending the session stops FixKit.** Reports already queued run when you resume, but without a banner.
 
 ## Pointing at the right code
 
-Nothing has to be marked. SwiftUI views carry their own lines; UIKit views are named after their properties.
+In SwiftUI and UIKit nothing has to be marked: SwiftUI views carry their own lines, UIKit views are named after their properties.
 
 ### SwiftUI
 
@@ -126,7 +130,7 @@ Every view reports the line its code starts on, the app's view around it and whe
 - **Where the code is, not where the view is drawn:** "used at" follows the code, so a view moved by `.offset` or a header pinned over a row is reported where it is written.
 - **`.fixScreen("Home")`** names the screen. With a `TabView`: `.fixScreen(selectedTab.rawValue)`.
 
-FixKit adds a `ViewBuilder.buildExpression` in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views. Release builds compile none of it.
+The lines come from a `ViewBuilder.buildExpression` that FixKit adds in Debug builds: the compiler passes each view's file and line through it, and SwiftUI hands them back with the view's frame, the way Xcode Previews selects views.
 
 **A builder that must return one concrete type stops compiling in Debug,** because every view in it comes back wrapped:
 
@@ -141,11 +145,11 @@ Where it falls short:
 - **A body with an explicit `return`** is named where it is used, and so is a view from another package.
 - **A row scrolled entirely under a bar** drawn by the same SwiftUI hierarchy, such as a custom tab bar, can win over the bar where the bar has nothing of its own. Accessibility and the screenshot in the report show what was pressed.
 - **The `MemberImportVisibility` upcoming feature** needs `import FixKit` in every file with views.
-- **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Without it, an unmarked view is named by accessibility and a `.fixable` view by its mark's line. It relies on SwiftUI's underscored API for Previews, so this is also the way out if an SDK drops it.
+- **To turn it off**, depend on FixKit without its default trait: `traits: []` on the dependency in `Package.swift`, or the same in the package's traits in Xcode. Then an unmarked view is named by accessibility (with AXe) and a `.fixable` view by its mark's line. The feature relies on SwiftUI's underscored API for Previews, so this is also the way out if an SDK drops it.
 
 ### UIKit
 
-No marks needed: FixKit finds the property that holds the pressed view, in the view controller, a custom view or a cell:
+FixKit finds the property that holds the pressed view, in the view controller, a custom view or a cell:
 
 ```
 [fix r1] ProfileViewController.nameLabel · UILabel "Alex Morgan" · .fixkit/reports/r1.png
@@ -156,7 +160,7 @@ No marks needed: FixKit finds the property that holds the pressed view, in the v
 - A view without a property is reported by class and screen: `UILabel "Alex Morgan" · ProfileViewController screen`.
 - A press inside a sheet never names a view beneath it.
 
-For an exact line, mark the view:
+To get a file and line as well, mark the view:
 
 ```swift
 let payButton = UIButton(configuration: .filled()).fixable("checkout.pay")
@@ -168,7 +172,7 @@ The `fixkit` npm package: TypeScript, no native code, works in Expo Go and devel
 
 ![In Expo Go, a long press on a card holder's name cut off to "Alex…" sends "The name is cut off" to Claude Code; Claude removes a fixed width in WalletCard.tsx and Fast Refresh shows "Alex Morgan" with the banner "Fixed by Claude Code"](docs/demo-react-native.gif)
 
-Install the [plugin](#1-install-the-plugin) ([Codex](#codex)), then:
+After [steps 1 and 2](#quick-start) of the quick start:
 
 ```bash
 npm install --save-dev fixkit
@@ -196,7 +200,6 @@ Run it as usual; no Xcode, Podfile or `app.json` changes:
 
 - **Start the agent in the folder with `package.json`.** Above it, Claude Code treats the app as native, and Codex may not start FixKit.
 - **Keep Metro running.** Fixes go live through Fast Refresh, no rebuild. Native changes (Podfile, `Info.plist`, config plugins) are rebuilt with the command above.
-- **Release builds** leave FixKit out.
 
 Reports name the components, the JSX line and where the component is used:
 
@@ -204,7 +207,7 @@ Reports name the components, the JSX line and where the component is used:
 [fix r1] WalletCard › Text · src/WalletCard.tsx:11 · used at App.tsx:15 · StaticText "Alex Morgan" · .fixkit/reports/r1.png
 ```
 
-- `testID`s appear as `#id`.
+- With AXe, `testID`s appear as `#id`.
 - **The pressed button stays still:** `Pressable`, `Touchable*`, `Button` and pressable `Text` don't fire while FixKit holds a press. It wraps React Native's private `Pressability` for that, so Metro warns once about a deep import. Gesture Handler buttons aren't held.
 - **Lines may be a few off** after Fast Refresh changes a file, until the next reload.
 - **Boot one simulator per iOS version:** with several, the receiver can't tell which runs the app, and reports come without a screenshot.
@@ -223,7 +226,7 @@ The `fixkit` Dart package: Dart only, no native code, no dependency beside the F
 
 ![A long press on the wallet balance sends "Make the balance green" to Claude Code; Claude changes the colour in wallet_card.dart, calls hot_reload, and the balance turns green under the banner "Fixed by Claude Code"](docs/demo-flutter.gif)
 
-Install the [plugin](#1-install-the-plugin) ([Codex](#codex)), then add the package to `pubspec.yaml`:
+After [steps 1 and 2](#quick-start) of the quick start, add the package to `pubspec.yaml`:
 
 ```yaml
 dependencies:
@@ -242,9 +245,8 @@ void main() => runApp(const FixKitHost(child: MyApp()));
 Run it with `flutter run` in the iOS simulator, from a terminal, VS Code or Android Studio.
 
 - **Start the agent in the folder with `pubspec.yaml`.** That is how the plugin knows the app is Flutter.
-- **No rebuild.** Saving a file does not hot reload a Flutter app, so the agent asks for it: in Claude Code with the mod's `hot_reload` tool, in Codex with a POST to the receiver's `/reload`. Both go through the VM service `flutter run` serves, the one DevTools' reload button calls. A compile error comes back to the agent; a change hot reload can't apply (`initState`, globals, `main`) gets a hot restart.
+- **No rebuild.** Saving a file does not hot reload a Flutter app, so the agent asks for it: in Claude Code with the mod's `hot_reload` tool, in Codex with a POST to the receiver's `/reload`. Both go through the VM service `flutter run` serves, the one DevTools' reload button calls. A compile error comes back to the agent; for a change hot reload can't apply (`initState`, globals, `main`), the agent hot restarts the app instead.
 - **In Codex, the POST needs network access**, which Codex's default sandbox blocks, even to `127.0.0.1`: approve the command when Codex asks, or allow it for the session with `codex -c sandbox_workspace_write.network_access=true`.
-- **Release builds** leave FixKit out: `FixKitHost` returns its child unless `kDebugMode`, a constant the compiler folds. On Android, the web and the desktop it returns its child too, also with `debugDefaultTargetPlatformOverride` set to iOS.
 
 Reports name the app's widget around the pressed one, the line of its constructor call and where that widget is used:
 
@@ -274,14 +276,14 @@ app (FixKit) ──POST /report──▶ receiver (node, 127.0.0.1:4747) ──A
       └────────── statuses ◀── Claude Code mod  or  Codex hooks
 ```
 
-- **Long press** (0.5 s) runs alongside the app's gestures, so buttons and scroll views keep working. At the default Haptic Touch speed it also wins over a view's `.contextMenu`: the menu is cancelled before it opens.
-- **Composer and banners** live in a separate window above the app: they cover sheets and stay out of screenshots.
-- **The receiver** names the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`.
+- **The long press** takes 0.5 s in SwiftUI and UIKit, 450 ms in React Native and Flutter. It runs alongside the app's gestures, so buttons and scroll views keep working. In SwiftUI and UIKit, at the default Haptic Touch speed, it also wins over a view's `.contextMenu`: the menu is cancelled before it opens.
+- **The composer and banners** stay out of screenshots. In SwiftUI and UIKit they live in a separate window above the app and cover sheets; in React Native and Flutter they are drawn over the app and hidden before the screenshot.
+- **The receiver** asks AXe for the deepest element under the touch and saves the accessibility tree to `.fixkit/reports/<id>.ax.json`.
 - **Claude Code:** the mod submits the report as a prompt and tracks its turn.
 - **Codex:** the receiver queues the prompt with `codex queue`; hooks report the turn's progress.
-- **"Live"** means the app relaunched while the agent worked: via XcodeBuildMCP, `xcodebuild`, Xcode's Run, Fast Refresh or a Flutter hot reload.
+- **"Live"** means the app launched or reloaded while the agent worked: a relaunch from XcodeBuildMCP, `xcodebuild` or Xcode's Run, a Fast Refresh, a Flutter hot reload or restart.
 - **One session at a time:** the newest session takes port 4747.
-- **Release builds** compile FixKit out, whatever flags the app sets.
+- **Release builds** leave FixKit out: the Swift package compiles to nothing whatever flags the app sets, and `FixKitHost` in React Native and Flutter returns the app untouched outside debug mode and off iOS.
 
 ## Try it on Tally
 
@@ -303,13 +305,13 @@ The bugs come from the git tag `demo-start`. Scripts use the iPhone 18 Pro simul
 
 ## Scripted recordings
 
-FixKit can play reports from a script, for screen recordings. Enable it:
+SwiftUI and UIKit apps can play reports from a script, for screen recordings. Enable it:
 
 ```bash
 xcrun simctl spawn booted defaults write <bundle id> FixKitDirector -bool YES
 ```
 
-Then serve steps from `http://127.0.0.1:4748/next`, one JSON object per request (204 when done):
+Then run a server on `127.0.0.1:4748` that answers `GET /next` with one step as JSON, status 200. FixKit asks for the next step at launch and after each one; any other status makes it ask again at once, so stop the server when the script is done:
 
 ```json
 {"press": "card.holderName", "text": "The name is cut off"}
@@ -318,7 +320,7 @@ Then serve steps from `http://127.0.0.1:4748/next`, one JSON object per request 
 {"defaults": {"selectedTab": "Activity"}}
 ```
 
-`press` targets a `.fixable` name, `at` a point. `defaults` stores values for the next launch.
+`press` targets a `.fixable` name, `at` a point. `defaults` stores string values for the next launch.
 
 ## Development
 
