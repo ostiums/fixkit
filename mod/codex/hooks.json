@@ -1,5 +1,5 @@
 {
-  "description": "FixKit: fix requests from the app in the simulator. Only the session's start and end wait on a hook; the rest forward their input to the receiver in the background.",
+  "description": "FixKit: fix requests from the app in the simulator or the emulator. Only the session's start and end wait on a hook; the rest forward their input to the receiver in the background.",
   "hooks": {
     "SessionStart": [
       {

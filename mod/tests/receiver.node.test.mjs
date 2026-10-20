@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { NO_APP, NOT_RUNNING } from '../server/flutter.mjs'
-import { adbCalls, deviceList, fakeAdb } from './fake-adb.mjs'
+import { adbCalls, deviceList, fakeAdb, restartAdbServer } from './fake-adb.mjs'
 import { startReceiver, until } from './receiver.mjs'
 
 /** The receiver in a folder of its own on a free port, with its stdout as JSON events; `adb` is a fake one. */
@@ -182,7 +182,7 @@ const androidReport = fields => ({
   touch: { x: 20, y: 30 },
   ...fields,
 })
-const reversed = (dir, serial) => adbCalls(dir).filter(args => args[1] === serial && args[2] === 'reverse')
+const reversed = (dir, serial) => adbCalls(dir).filter(args => args[1] === serial && args[2] === 'reverse' && args[3] !== '--list')
 
 test('the receiver keeps its port reversed on every Android device, one that comes later too', async t => {
   const dir = adbFolder()
@@ -199,6 +199,20 @@ test('the receiver keeps its port reversed on every Android device, one that com
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   assert.equal(reversed(dir, 'emulator-5554').length, 1)
+})
+
+test('a restart of the adb server, which drops every reverse, gets the port reversed again', async t => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554') })
+  const receiver = await startReceiver({ env: { FIXKIT_ADB: adb } })
+  t.after(receiver.stop)
+  await until(() => reversed(dir, 'emulator-5554').length === 1, 'the first reverse')
+
+  restartAdbServer(dir)
+  for (let waited = 0; reversed(dir, 'emulator-5554').length < 2; waited += 100) {
+    if (waited > 6000) assert.fail('the port was never reversed again')
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
 })
 
 test("an Android report gets its device's screenshot and what accessibility says, in the app's units", async () => {
@@ -237,7 +251,10 @@ test('two Android devices on one API level: no screenshot, and the advice once',
   await untilEvent(() => events.filter(event => event.type === 'report').length === 2)
 
   assert.equal(events.find(event => event.type === 'report').report.screenshot, null)
-  assert.equal(events.filter(event => event.type === 'notice' && event.message.includes('per API level')).length, 1)
+  const notices = events.filter(event => event.type === 'notice' && event.message.includes('per API level'))
+  assert.equal(notices.length, 1)
+  // A Flutter app sends no API level: per level is not enough for it.
+  assert.match(notices[0].message, /one at a time for Flutter/)
 })
 
 test('an iOS report never asks adb for a screenshot or the screen', async () => {
