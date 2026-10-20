@@ -9,6 +9,9 @@
     "ios": {
       "supportsTablet": false
     },
+    "android": {
+      "package": "com.fixkit.example"
+    },
     "experiments": {
       "tsconfigPaths": false
     }
