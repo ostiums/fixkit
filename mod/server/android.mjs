@@ -11,8 +11,8 @@ import { promisify } from 'node:util'
 const run = promisify(execFile)
 
 /**
- * Where adb may be, most specific first: the variable, the SDK the environment names, `PATH`, then
- * the SDK Android Studio installs. `FIXKIT_ADB`, when set, is the only place looked at.
+ * Where adb may be, most specific first: the variable, the SDK the environment names, the SDK
+ * Android Studio installs, then `PATH`. `FIXKIT_ADB`, when set, is the only place looked at.
  */
 export function adbCandidates(env = process.env, home = homedir()) {
   const found = []
@@ -28,8 +28,10 @@ export function adbCandidates(env = process.env, home = homedir()) {
     return found
   }
   for (const sdk of [env.ANDROID_HOME, env.ANDROID_SDK_ROOT].filter(Boolean)) add(join(sdk, 'platform-tools', 'adb'))
-  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) add(join(dir, 'adb'))
+  // Before PATH: Flutter and React Native run this SDK's adb, and an adb of another version
+  // restarts the server, dropping every reverse, Metro's among them.
   add(join(home, 'Library', 'Android', 'sdk', 'platform-tools', 'adb'))
+  for (const dir of (env.PATH ?? '').split(delimiter).filter(Boolean)) add(join(dir, 'adb'))
   return found
 }
 
@@ -70,7 +72,13 @@ export async function pickDevice(serials, { os, sdkOf }) {
  * it gives is DDS's, on the Mac already, and no forward leads there.
  */
 export function forwardedVmService(vmService, forwards) {
-  const url = new URL(vmService)
+  let url
+  try {
+    url = new URL(vmService)
+  } catch {
+    // No address to forward: the reload that follows says the app isn't reachable.
+    return vmService
+  }
   const forward = forwards.find(one => String(one.device) === url.port)
   if (!forward) return vmService
   url.port = String(forward.host)

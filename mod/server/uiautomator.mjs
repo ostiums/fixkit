@@ -44,17 +44,29 @@ export function parseHierarchy(xml, ratio) {
   const end = xml.indexOf('</hierarchy>')
   if (start === -1 || end === -1) return null
 
+  // Each node's attributes, or null where one closes.
+  const tags = [...xml.slice(start, end).matchAll(/<node\b([^>]*?)(\/?)>|<\/node>/g)].map(([, attributes, closed]) =>
+    attributes === undefined
+      ? null
+      : { closed, read: Object.fromEntries([...attributes.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, name, value]) => [name, unescape(value)])) },
+  )
+  // The app's touch is measured from its content, which a window that isn't edge to edge starts
+  // below the status bar; the dump measures from the screen's corner.
+  const content = tags.find(tag => tag?.read['resource-id'] === 'android:id/content')
+  const [left, top] = content?.read.bounds?.match(/-?\d+/g)?.map(Number) ?? [0, 0]
+
   const roots = []
   const open = []
-  for (const [, attributes, closed] of xml.slice(start, end).matchAll(/<node\b([^>]*?)(\/?)>|<\/node>/g)) {
-    if (attributes === undefined) {
+  for (const tag of tags) {
+    if (tag === null) {
       open.pop()
       continue
     }
-    const read = Object.fromEntries([...attributes.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, name, value]) => [name, unescape(value)]))
-    const node = element(read, ratio)
+    const node = element(tag.read, ratio)
+    node.frame.x -= left / ratio
+    node.frame.y -= top / ratio
     ;(open.at(-1)?.children ?? roots).push(node)
-    if (!closed) open.push(node)
+    if (!tag.closed) open.push(node)
   }
   return roots.some(hasText) ? roots : null
 }

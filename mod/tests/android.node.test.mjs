@@ -29,7 +29,8 @@ test('FIXKIT_ADB is the only adb when set, even a missing one', () => {
   assert.deepEqual(adbCandidates({ FIXKIT_ADB: join(root, 'none'), ANDROID_HOME: sdk }, root), [])
 })
 
-test('without FIXKIT_ADB, the SDK named in the environment, then PATH, then the default SDK', () => {
+test("without FIXKIT_ADB, the SDK named in the environment, then the SDK the build tools default to, then PATH", () => {
+  // Flutter and React Native run the default SDK's adb; another adb on PATH would restart its server.
   const root = folder()
   const home = executable(join(root, 'home-sdk', 'platform-tools'))
   const sdkRoot = executable(join(root, 'root-sdk', 'platform-tools'))
@@ -37,7 +38,7 @@ test('without FIXKIT_ADB, the SDK named in the environment, then PATH, then the 
   const fallback = executable(join(root, 'Library', 'Android', 'sdk', 'platform-tools'))
   const env = { ANDROID_HOME: join(root, 'home-sdk'), ANDROID_SDK_ROOT: join(root, 'root-sdk'), PATH: join(root, 'bin') }
 
-  assert.deepEqual(adbCandidates(env, root), [home, sdkRoot, onPath, fallback])
+  assert.deepEqual(adbCandidates(env, root), [home, sdkRoot, fallback, onPath])
 })
 
 test('only devices online count', () => {
