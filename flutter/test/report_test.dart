@@ -42,6 +42,15 @@ void main() {
     });
   });
 
+  test('on Android the report carries the platform, the pixel ratio and the VM service the receiver finds the device by', () {
+    final body = reportBody(const Target(Offset(1, 2)), 'x', os: '6.6', platform: 'android', pixelRatio: 2.625, vmService: 'http://127.0.0.1:1/x=/');
+
+    expect(body['platform'], 'android');
+    expect(body['pixelRatio'], 2.625);
+    expect(body['vmService'], 'http://127.0.0.1:1/x=/');
+    expect(body.containsKey('simulator'), isFalse);
+  });
+
   test("iOS's version as the platform words it", () {
     expect(osVersion('Version 26.5 (Build 23F77)'), '26.5');
     expect(osVersion('Version 18.0.1 (Build 22A3370)'), '18.0.1');

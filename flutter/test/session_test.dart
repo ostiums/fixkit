@@ -20,7 +20,7 @@ class FakeClient extends Client {
   Future<ReportStatus> statusOf(String id) async => ReportStatus(id, 'live', agent);
 
   @override
-  Future<ReportStatus> launched(String? vmService) async => ReportStatus(null, null, agent);
+  Future<ReportStatus> launched(String? vmService, {bool android = false}) async => ReportStatus(null, null, agent);
 }
 
 const target = Target(Offset(10, 20), Found(name: 'Card › Text'));

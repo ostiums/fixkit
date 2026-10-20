@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-/// The web is not iOS.
-bool get onIOS => false;
+/// The web is neither iOS nor Android.
+bool get onDevice => false;
 
 /// Where there is no dart:io, the web: FixKit does nothing.
 class DebugHost extends StatelessWidget {

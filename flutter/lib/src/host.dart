@@ -10,13 +10,13 @@ import 'session.dart';
 // Shorter than the 500 ms of Flutter's own long press, so FixKit's wins the arena first.
 const _pressFor = Duration(milliseconds: 450);
 
-/// Whether the app runs on iOS itself, which in debug means the simulator.
-bool get onIOS => runsOnIOS(isIOS: Platform.isIOS, environment: Platform.environment);
+/// Whether the app runs on iOS or Android itself, which in debug means the simulator or the emulator.
+bool get onDevice => runsOnDevice(isIOS: Platform.isIOS, isAndroid: Platform.isAndroid, environment: Platform.environment);
 
-/// iOS, or `flutter test`, which runs on the Mac with the platform overridden: the host's tests run it.
+/// iOS, Android, or `flutter test`, which runs on the Mac with the platform overridden: the host's tests run it.
 @visibleForTesting
-bool runsOnIOS({required bool isIOS, required Map<String, String> environment}) =>
-    isIOS || environment.containsKey('FLUTTER_TEST');
+bool runsOnDevice({required bool isIOS, required bool isAndroid, required Map<String, String> environment}) =>
+    isIOS || isAndroid || environment.containsKey('FLUTTER_TEST');
 
 /// The debug host: a long press anywhere opens the composer for the app's widget under it.
 class DebugHost extends StatefulWidget {
@@ -28,12 +28,14 @@ class DebugHost extends StatefulWidget {
   State<DebugHost> createState() => _DebugHostState();
 }
 
-class _DebugHostState extends State<DebugHost> {
+class _DebugHostState extends State<DebugHost> with WidgetsBindingObserver {
   final _session = Session();
 
   @override
   void initState() {
     super.initState();
+    // Before the app's own: the host is built first, so Android's back button reaches it first.
+    WidgetsBinding.instance.addObserver(this);
     _session.addListener(_changed);
     WidgetsBinding.instance.addPostFrameCallback((_) => _session.announceLaunch());
   }
@@ -48,8 +50,18 @@ class _DebugHostState extends State<DebugHost> {
 
   void _changed() => setState(() {});
 
+  // Android's back button closes the composer, not the app's screen under it. With the keyboard up
+  // the first press only hides the keyboard, and the draft stays.
+  @override
+  Future<bool> didPopRoute() async {
+    if (_session.target == null) return false;
+    _session.cancel();
+    return true;
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _session.removeListener(_changed);
     _session.dispose();
     super.dispose();
@@ -65,7 +77,8 @@ class _DebugHostState extends State<DebugHost> {
   @override
   Widget build(BuildContext context) {
     final target = _session.target;
-    final lift = target == null ? 0.0 : composerLift(target, MediaQuery.sizeOf(context), MediaQuery.viewInsetsOf(context).bottom);
+    final bottom = composerBottom(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.paddingOf(context).bottom);
+    final lift = target == null ? 0.0 : composerLift(target, MediaQuery.sizeOf(context), bottom);
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
       gestures: {
