@@ -3,17 +3,13 @@ import { test } from 'node:test'
 
 import { OFFLINE, agentOf, bannerFor, sentTo } from '../src/banners.ts'
 
-test('the sent banner names the agent', () => {
-  assert.equal(sentTo('Claude Code').text, 'Sent to Claude Code')
-  assert.equal(sentTo('Codex').text, 'Sent to Codex')
-})
-
 test('a receiver that does not answer cannot name its agent', () => {
   assert.deepEqual(OFFLINE, { text: 'FixKit is not listening', glyph: '!', working: false })
 })
 
 test('each status names the agent where it speaks of one', () => {
   for (const agent of ['Claude Code', 'Codex']) {
+    assert.deepEqual(sentTo(agent), { text: `Sent to ${agent}`, glyph: null, working: true })
     assert.deepEqual(bannerFor('queued', agent), { text: `Queued in ${agent}`, glyph: null, working: true })
     assert.deepEqual(bannerFor('fixing', agent), { text: `${agent} is fixing it`, glyph: null, working: true })
     assert.deepEqual(bannerFor('live', agent), { text: `Fixed by ${agent}`, glyph: '✓', working: false })

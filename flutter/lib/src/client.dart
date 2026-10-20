@@ -55,9 +55,7 @@ class Client {
   /// Sends the report and returns its receipt. The receiver answers once it has read the screen.
   Future<Receipt> sendReport(Map<String, Object> body) async {
     final answer = _status(await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20)));
-    final id = answer.id;
-    if (id == null) throw const FormatException('the receipt has no id');
-    return Receipt(id, answer.agent);
+    return Receipt(answer.id!, answer.agent);
   }
 
   /// Where the report is now.

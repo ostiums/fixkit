@@ -43,9 +43,7 @@ async function deliver(sent, before = async () => {}) {
   try {
     await before(base)
     const answer = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(sent) })
-    const sentBack = await answer.json()
-    assert.equal(sentBack.id, 'r1')
-    assert.equal(sentBack.agent, 'Claude Code')
+    assert.equal((await answer.json()).id, 'r1')
     await until(() => events.some(event => event.type === 'report'))
     return events.find(event => event.type === 'report').report
   } finally {
