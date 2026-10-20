@@ -9,11 +9,11 @@ class FakeClient extends Client {
   String agent = 'Claude Code';
 
   @override
-  Future<ReportStatus> sendReport(Map<String, Object> body) async {
+  Future<Receipt> sendReport(Map<String, Object> body) async {
     reports.add(body);
     final id = answer();
     if (id == null) throw Exception('offline');
-    return ReportStatus(id, null, agent);
+    return Receipt(id, agent);
   }
 
   @override

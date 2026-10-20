@@ -90,7 +90,7 @@ class Session extends ChangeNotifier {
     outline = pressed;
     _changed();
     await _frames(2);
-    ReportStatus? receipt;
+    Receipt? receipt;
     try {
       receipt = await _client.sendReport(
         reportBody(pressed, comment, os: osVersion(Platform.operatingSystemVersion), simulator: simulatorIn(Directory.systemTemp.path)),
@@ -104,7 +104,7 @@ class Session extends ChangeNotifier {
       return;
     }
     _show(sentTo(receipt.agent));
-    unawaited(_follow(receipt.id!));
+    unawaited(_follow(receipt.id));
   }
 
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is

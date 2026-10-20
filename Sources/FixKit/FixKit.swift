@@ -1,8 +1,8 @@
 import SwiftUI
 
 // FixKit: long press anything in a debug build running in the simulator, type what is
-// wrong, and the report goes to the Claude Code or Codex session listening on this Mac through
-// the fixkit mod. Release builds compile all of it away.
+// wrong, and the report goes to the Claude Code or Codex session listening on this Mac
+// through the fixkit mod. Release builds compile all of it away.
 
 extension View {
     /// Optional: names an element and records the source line it was declared on, so its
