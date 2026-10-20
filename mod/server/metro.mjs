@@ -4,6 +4,7 @@
 // Metro's /symbolicate answers for the bundle as it is now, which after a Fast Refresh is lines away
 // from the code the app still runs, so the map of the bundle the app launched with is kept and read
 // first. No dependencies.
+import { join } from 'node:path'
 
 /** The bundle frames of one stack, `at name (url:line:column)`; native and anonymous frames go. */
 export function parseStack(stack) {
@@ -156,15 +157,22 @@ async function locate(frames, maps, fetchImpl) {
   return kept.map(frame => frame ?? answered[next++] ?? {})
 }
 
+// How Metro names a file from its project root when the bundle asks for sourcePaths=url-server, as
+// an Android app's does.
+const PROJECT = '/[metro-project]/'
+
+/** A file Metro named, on disk: from the project root, which is the receiver's, when Metro named it from there. */
+const onDisk = (file, root) => (file?.startsWith(PROJECT) ? join(root, file.slice(PROJECT.length)) : file)
+
 /**
  * Where the pressed element's JSX is written (`source`) and where the components around it are
  * used (`usedAt`, nearest first): the first stack is the element's, the others its owners'. `maps`
  * holds the maps of the bundles apps launched with, or promises of them, by bundle URL.
  */
-export async function sourcesFor(stacks, { maps = new Map(), fetchImpl = fetch } = {}) {
+export async function sourcesFor(stacks, { maps = new Map(), fetchImpl = fetch, root = process.cwd() } = {}) {
   const parsed = stacks.map(parseStack)
   // One lookup for every stack: one request to Metro at most.
-  const located = await locate(parsed.flat(), maps, fetchImpl)
+  const located = (await locate(parsed.flat(), maps, fetchImpl)).map(frame => ({ ...frame, file: onDisk(frame.file, root) }))
   let next = 0
   const found = parsed.map(frames => {
     const mine = located.slice(next, (next += frames.length))

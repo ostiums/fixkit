@@ -55,9 +55,8 @@ function Composer({ target, canSend, lift }: { target: Target; canSend: boolean;
   const pulse = useRef(new Animated.Value(0.35)).current
 
   useEffect(() => {
-    const shown = Keyboard.addListener(KEYBOARD_SHOWN, event =>
-      setKeyboard(Platform.OS === 'android' ? event.endCoordinates.height : height - event.endCoordinates.screenY),
-    )
+    // From the keyboard's top: Android's height leaves out the navigation bar under it.
+    const shown = Keyboard.addListener(KEYBOARD_SHOWN, event => setKeyboard(height - event.endCoordinates.screenY))
     const hidden = Keyboard.addListener(KEYBOARD_HIDDEN, () => setKeyboard(0))
     // Android's back button closes the composer, not the app's screen under it. With the keyboard
     // up the first press only hides the keyboard, and the draft stays.

@@ -34,7 +34,8 @@ function tree(files) {
 /** Runs the SessionStart hook as Codex does: in the session's folder, its input on stdin. */
 function sessionStart(cwd, session, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [SESSION_START], { cwd, env: { ...process.env, ...env } })
+    // The receiver the hook starts finds no adb: a real emulator must not get the test's port reversed.
+    const child = spawn(process.execPath, [SESSION_START], { cwd, env: { ...process.env, FIXKIT_ADB: join(cwd, 'no-adb'), ...env } })
     let out = ''
     child.stdout.on('data', chunk => (out += chunk))
     child.on('error', reject)
@@ -383,7 +384,7 @@ function runHook(event, input, { cwd, port }) {
   return new Promise(resolve => {
     const child = spawn('sh', ['-c', command], {
       cwd,
-      env: { ...process.env, PLUGIN_ROOT: MOD.replace(/\/$/, ''), FIXKIT_PORT: String(port) },
+      env: { ...process.env, PLUGIN_ROOT: MOD.replace(/\/$/, ''), FIXKIT_PORT: String(port), FIXKIT_ADB: join(cwd, 'no-adb') },
     })
     child.on('exit', resolve)
     child.stdin.end(JSON.stringify({ session_id: 'S', turn_id: 'T1', cwd, hook_event_name: event, ...input }))

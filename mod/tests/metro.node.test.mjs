@@ -68,6 +68,18 @@ test("the element's line comes first, its owners' uses after, from the bundle's 
   assert.deepEqual(asked, ['http://127.0.0.1:8081/symbolicate'])
 })
 
+test("paths Metro gives from the project's root, as for an Android bundle, are the project's files", async () => {
+  // An Android app asks for its bundle with sourcePaths=url-server: Metro names files from its project root.
+  const fetchImpl = async (url, init) => {
+    const { stack } = JSON.parse(init.body)
+    const files = { 1: '/[metro-project]/src/WalletCard.tsx', 2: '/[metro-project]/App.tsx' }
+    return { ok: true, json: async () => ({ stack: stack.map(f => ({ ...f, file: files[f.lineNumber], lineNumber: 11 })) }) }
+  }
+  const found = await sourcesFor([stack(at('WalletCard', 1)), stack(at('App', 2))], { fetchImpl, root: '/app' })
+
+  assert.deepEqual(found, { source: { file: '/app/src/WalletCard.tsx', line: 11 }, usedAt: [{ file: '/app/App.tsx', line: 11 }] })
+})
+
 test('an owner on the same line as the element is not repeated', async () => {
   const { fetchImpl } = metro()
   const found = await sourcesFor([stack(at('App', 93059)), stack(at('App', 93059))], { fetchImpl })
