@@ -55,9 +55,8 @@ const ACTIVE = new Set(['queued', 'fixing', 'rebuilding'])
 // The AXe that answered last; the search for one runs again only when it fails.
 let axe = null
 
-// The adb that answered last, the same way, and the Android devices whose port it has reversed.
+// The adb that answered last, the same way.
 let adb = null
-const reversed = new Set()
 
 // The maps of the bundles React Native apps launched with, by bundle URL, each a promise of the map
 // or of null. A Fast Refresh changes the bundle Metro serves but not the code the app runs, so its
@@ -133,13 +132,12 @@ async function keepReversed(port) {
     adb = null
     return
   }
-  // A device that went away and comes back, an emulator restarted, has lost its reverse.
-  for (const serial of reversed) if (!serials.includes(serial)) reversed.delete(serial)
-  for (const serial of serials.filter(one => !reversed.has(one))) {
-    await tool.reverse(serial, port).then(
-      () => reversed.add(serial),
-      error => log(`adb reverse on ${serial}: ${error.message}`),
-    )
+  // Asked of the device each time: an emulator restarted, or a restart of the adb server, drops
+  // the reverse while the device stays listed.
+  for (const serial of serials) {
+    const ports = await tool.reversedPorts(serial).catch(() => [])
+    if (ports.includes(port)) continue
+    await tool.reverse(serial, port).catch(error => log(`adb reverse on ${serial}: ${error.message}`))
   }
 }
 
@@ -157,7 +155,7 @@ async function deviceOf(report) {
   const { serial, online } = await pickDevice(serials, { os: report.os, sdkOf: one => tool.sdkOf(one) })
   if (serial === null && online > 1 && !toldDevice) {
     toldDevice = true
-    emit({ type: 'notice', message: `Run one Android emulator per API level: ${online} run, so reports come without a screenshot or what accessibility says` })
+    emit({ type: 'notice', message: `Run one Android emulator per API level, one at a time for Flutter: ${online} run, so reports come without a screenshot or what accessibility says` })
   }
   return serial
 }

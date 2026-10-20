@@ -1,13 +1,18 @@
 // Test helper: an adb that answers from a script, for the receiver's Android side without an emulator.
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Runs as adb: answers from adb.json beside it and logs every call to adb.log.
 const PROGRAM = `
-const { appendFileSync, readFileSync } = require('node:fs')
+const { appendFileSync, readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const here = __dirname
 const script = JSON.parse(readFileSync(join(here, 'adb.json'), 'utf8'))
+const reversesFile = join(here, 'adb-reverses.json')
+let reverses = {}
+try {
+  reverses = JSON.parse(readFileSync(reversesFile, 'utf8'))
+} catch {}
 let args = process.argv.slice(2)
 appendFileSync(join(here, 'adb.log'), JSON.stringify(args) + '\\n')
 let serial = null
@@ -19,7 +24,12 @@ const call = args.join(' ')
 if (call === 'devices') process.stdout.write(script.devices ?? 'List of devices attached\\n\\n')
 else if (call === 'forward --list') process.stdout.write(script.forwards ?? '')
 else if (call === 'shell getprop ro.build.version.sdk') process.stdout.write((script.sdk?.[serial] ?? '') + '\\n')
-else if (args[0] === 'reverse') process.exit(0)
+else if (call === 'reverse --list') {
+  for (const port of reverses[serial] ?? []) process.stdout.write(serial + ' tcp:' + port + ' tcp:' + port + '\\n')
+} else if (args[0] === 'reverse') {
+  reverses[serial] = [...new Set([...(reverses[serial] ?? []), args[1].slice(4)])]
+  writeFileSync(reversesFile, JSON.stringify(reverses))
+}
 else if (call === 'exec-out screencap -p') process.stdout.write(Buffer.from(script.png ?? '', 'base64'))
 else if (call === 'exec-out uiautomator dump /dev/tty') {
   if (script.dump === null) {
@@ -43,6 +53,9 @@ export function fakeAdb(dir, { devices, forwards, sdk, dump, png } = {}) {
   }
   return path
 }
+
+/** Drops every reverse the fake in `dir` holds, as a restart of the adb server does. */
+export const restartAdbServer = dir => rmSync(join(dir, 'adb-reverses.json'), { force: true })
 
 /** The calls the fake in `dir` has answered, each as its arguments. */
 export function adbCalls(dir) {

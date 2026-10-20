@@ -4,13 +4,13 @@
     "name": "ostiums"
   },
   "metadata": {
-    "description": "FixKit: fix iOS, React Native and Flutter UI from the simulator with Claude Code."
+    "description": "FixKit: fix iOS, React Native and Flutter UI from the simulator or the Android emulator with Claude Code."
   },
   "plugins": [
     {
       "name": "fixkit",
       "source": "./mod",
-      "description": "Report UI fixes from the iOS simulator, from Swift, React Native and Flutter apps, straight into your Claude Code session."
+      "description": "Report UI fixes from the iOS simulator, from Swift, React Native and Flutter apps, and from the Android emulator for React Native and Flutter, straight into your Claude Code session."
     }
   ]
 }

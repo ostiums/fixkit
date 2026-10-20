@@ -114,6 +114,15 @@ export class Adb {
     return (await this.call(['shell', 'getprop', 'ro.build.version.sdk'], { serial })).trim() || null
   }
 
+  /** The device's ports reversed to the Mac: `adb reverse --list` lines are `host-16 tcp:4747 tcp:4747`. */
+  async reversedPorts(serial) {
+    return (await this.call(['reverse', '--list'], { serial }))
+      .split('\n')
+      .map(line => line.trim().split(/\s+/)[1]?.match(/^tcp:(\d+)$/)?.[1])
+      .filter(Boolean)
+      .map(Number)
+  }
+
   async reverse(serial, port) {
     await this.call(['reverse', `tcp:${port}`, `tcp:${port}`], { serial })
   }
