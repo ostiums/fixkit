@@ -8,13 +8,6 @@ struct FixBannerTests {
         #expect(FixBanners.fixed(by: "Codex") == "Fixed by Codex")
         #expect(FixBanners.stopped(by: "Codex") == "Not rebuilt: see Codex")
         #expect(FixBanners.queued(in: "Codex") == "Queued in Codex")
-        #expect(FixBanners.notListening(agent: "Codex") == "Codex is not listening")
-        #expect(FixBanners.composerHint(agent: "Codex") == "What should Codex fix here?")
-    }
-
-    @Test func noAgentHeardFromYet() {
-        #expect(FixBanners.notListening(agent: nil) == "No agent is listening")
-        #expect(FixBanners.composerHint(agent: nil) == "What needs fixing here?")
     }
 
     @Test func anAnswerWithoutAnAgentIsClaudeCode() {

@@ -1,18 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { agentOf, bannerFor, composerHint, offline, sentTo } from '../src/banners.ts'
+import { OFFLINE, agentOf, bannerFor, sentTo } from '../src/banners.ts'
 
-test('sent and offline banners name the agent', () => {
+test('the sent banner names the agent', () => {
   assert.equal(sentTo('Claude Code').text, 'Sent to Claude Code')
   assert.equal(sentTo('Codex').text, 'Sent to Codex')
-  assert.equal(offline('Codex').text, 'Codex is not listening')
-  assert.equal(offline('Claude Code').glyph, '!')
 })
 
-test('offline before any answer names no agent', () => {
-  assert.equal(offline(null).text, 'No agent is listening')
-  assert.equal(offline(null).working, false)
+test('a receiver that does not answer cannot name its agent', () => {
+  assert.deepEqual(OFFLINE, { text: 'FixKit is not listening', glyph: '!', working: false })
 })
 
 test('each status names the agent where it speaks of one', () => {
@@ -29,9 +26,4 @@ test('each status names the agent where it speaks of one', () => {
 test('an answer without an agent comes from an older receiver: Claude Code', () => {
   assert.equal(agentOf({ agent: 'Codex' }), 'Codex')
   assert.equal(agentOf({}), 'Claude Code')
-})
-
-test('the composer asks for the agent last heard from, else for no one', () => {
-  assert.equal(composerHint('Codex'), 'What should Codex fix here?')
-  assert.equal(composerHint(null), 'What needs fixing here?')
 })

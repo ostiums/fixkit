@@ -10,12 +10,8 @@ class StatusBanner {
 /// The report went to `agent`.
 StatusBanner sentTo(String agent) => StatusBanner('Sent to $agent', working: true);
 
-/// The receiver did not answer; `agent` is the one last heard from, null before any answer.
-StatusBanner offlineFor(String? agent) =>
-    StatusBanner(agent == null ? 'No agent is listening' : '$agent is not listening', glyph: '!');
-
-/// The composer's placeholder: the agent last heard from, if any.
-String composerHint(String? agent) => agent == null ? 'What needs fixing here?' : 'What should $agent fix here?';
+/// The receiver did not answer, so it cannot say which agent it works for.
+const offline = StatusBanner('FixKit is not listening', glyph: '!');
 
 /// The banner for a report's status as the receiver gives it.
 StatusBanner bannerFor(String status, String agent) => switch (status) {

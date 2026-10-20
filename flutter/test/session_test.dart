@@ -68,7 +68,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await sending;
 
-    expect(session.banner?.text, 'No agent is listening');
+    expect(session.banner?.text, 'FixKit is not listening');
     await tester.pump(const Duration(seconds: 5));
     expect(session.banner, isNull);
     session.dispose();

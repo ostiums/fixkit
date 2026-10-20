@@ -108,7 +108,7 @@ struct FixComposerOverlay: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(fixTint)
 
-            TextField(FixBanners.composerHint(agent: session.agent), text: Bindable(session).draft)
+            TextField("What should be fixed here?", text: Bindable(session).draft)
                 .font(.system(size: 16))
                 .foregroundStyle(.white)
                 .tint(fixTint)

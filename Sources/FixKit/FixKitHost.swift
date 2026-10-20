@@ -17,9 +17,6 @@ final class FixSession {
     /// a new long press would change the screen it reads.
     private(set) var isSending = false
 
-    /// The agent the receiver last named; nil until it has answered.
-    private(set) var agent: String?
-
     struct Banner: Equatable {
         var text: String
         var symbol: String
@@ -70,13 +67,13 @@ final class FixSession {
             await dismiss()
             do {
                 let receipt = try await FixKitClient.send(target, comment: comment)
-                let agent = hear(receipt.agent)
                 isSending = false
+                let agent = FixBanners.agent(from: receipt.agent)
                 show(Banner(text: FixBanners.sent(to: agent), symbol: "paperplane.fill", isWorking: true))
                 await follow(receipt.id)
             } catch {
                 isSending = false
-                show(Banner(text: FixBanners.notListening(agent: agent), symbol: "wifi.slash"), for: 4)
+                show(Banner(text: "FixKit is not listening", symbol: "wifi.slash"), for: 4)
             }
         }
     }
@@ -95,30 +92,21 @@ final class FixSession {
     /// screen however the app was built. Then follows the report the agent is working on, or says
     /// so once when the build on screen is the one that just went live.
     func announceLaunch() async {
-        guard let latest = try? await FixKitClient.launched() else { return }
-        let agent = hear(latest.agent)
-        guard let id = latest.id, let status = latest.status else { return }
+        guard let latest = try? await FixKitClient.launched(), let id = latest.id, let status = latest.status
+        else { return }
 
         switch status {
-        case "live": announceFixed(latest, by: agent)
+        case "live": announceFixed(latest)
         case "stopped": break
         default: polling = Task { await follow(id) }
         }
     }
 
-    /// Keeps the agent an answer names, and returns it.
-    private func hear(_ named: String?) -> String {
-        let heard = FixBanners.agent(from: named)
-        // Observed by the composer: only a change redraws it.
-        if agent != heard { agent = heard }
-        return heard
-    }
-
-    private func announceFixed(_ fix: FixStatus, by agent: String) {
+    private func announceFixed(_ fix: FixStatus) {
         let key = "\(fix.run)/\(fix.id ?? "")"
         guard UserDefaults.standard.string(forKey: "fixkit.announced") != key else { return }
         UserDefaults.standard.set(key, forKey: "fixkit.announced")
-        show(Banner(text: FixBanners.fixed(by: agent), symbol: "checkmark.circle.fill"), for: 4)
+        show(Banner(text: FixBanners.fixed(by: FixBanners.agent(from: fix.agent)), symbol: "checkmark.circle.fill"), for: 4)
     }
 
     private func follow(_ id: String) async {
@@ -126,14 +114,14 @@ final class FixSession {
             try? await Task.sleep(for: .seconds(1))
             guard let latest = try? await FixKitClient.status(of: id), let status = latest.status else { continue }
 
-            let agent = hear(latest.agent)
+            let agent = FixBanners.agent(from: latest.agent)
             switch status {
             case "fixing":
                 show(Banner(text: FixBanners.fixing(by: agent), symbol: "wand.and.stars", isWorking: true))
             case "rebuilding":
                 show(Banner(text: "Rebuilding the app", symbol: "hammer.fill", isWorking: true))
             case "live":
-                announceFixed(latest, by: agent)
+                announceFixed(latest)
                 return
             case "stopped":
                 show(Banner(text: FixBanners.stopped(by: agent), symbol: "xmark.circle.fill"), for: 4)
@@ -167,16 +155,6 @@ enum FixBanners {
     static func fixing(by agent: String) -> String { "\(agent) is fixing it" }
     static func fixed(by agent: String) -> String { "Fixed by \(agent)" }
     static func stopped(by agent: String) -> String { "Not rebuilt: see \(agent)" }
-
-    /// The receiver did not answer, so only an agent heard from earlier can be named.
-    static func notListening(agent: String?) -> String {
-        agent.map { "\($0) is not listening" } ?? "No agent is listening"
-    }
-
-    /// The composer's placeholder: the agent last heard from, if any.
-    static func composerHint(agent: String?) -> String {
-        agent.map { "What should \($0) fix here?" } ?? "What needs fixing here?"
-    }
 }
 
 struct FixKitHostModifier: ViewModifier {

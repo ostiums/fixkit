@@ -33,9 +33,6 @@ class Session extends ChangeNotifier {
   /// A report is on its way: the receiver answers once it has read the screen.
   bool sending = false;
 
-  /// The agent the receiver last named; null until it first answers.
-  String? agent;
-
   String _draft = '';
   // Each follow holds a ticket; a newer follow or a new report retires the older one.
   int _ticket = 0;
@@ -102,9 +99,8 @@ class Session extends ChangeNotifier {
     sending = false;
     outline = null;
     _changed();
-    if (receipt != null) _hear(receipt.agent);
     if (receipt == null) {
-      _show(offlineFor(agent), hideAfter: const Duration(seconds: 4));
+      _show(offline, hideAfter: const Duration(seconds: 4));
       return;
     }
     _show(sentTo(receipt.agent));
@@ -118,7 +114,6 @@ class Session extends ChangeNotifier {
     try {
       final info = await developer.Service.getInfo();
       final answer = await _client.launched(info.serverUri?.toString());
-      _hear(answer.agent);
       final id = answer.id;
       final status = answer.status;
       if (id != null && status != null && !isOver(status)) unawaited(_follow(id));
@@ -138,20 +133,12 @@ class Session extends ChangeNotifier {
       if (mine != _ticket) return;
       final status = answer?.status;
       if (answer == null || status == null) continue;
-      _hear(answer.agent);
       if (isOver(status)) {
         _show(bannerFor(status, answer.agent), hideAfter: const Duration(seconds: 4));
         return;
       }
       _show(bannerFor(status, answer.agent));
     }
-  }
-
-  // Keeps the agent an answer names; the composer reads it, so only a change redraws.
-  void _hear(String named) {
-    if (agent == named) return;
-    agent = named;
-    _changed();
   }
 
   Future<void> _sleep(Duration duration) {
