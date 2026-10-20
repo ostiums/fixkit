@@ -112,12 +112,24 @@ async function fetchJson(url, init, timeout, fetchImpl) {
   return response.json()
 }
 
+// The names an Android app gives the Mac's Metro: the emulator's alias for the Mac's loopback, or
+// its own loopback that adb reverses to the Mac's.
+const LOOPBACK_ALIASES = new Set(['10.0.2.2', '10.0.3.2', 'localhost'])
+
+/** A URL an app names Metro by, as the receiver on the Mac reaches it. */
+export function onMac(url) {
+  const parsed = new URL(url)
+  if (!LOOPBACK_ALIASES.has(parsed.hostname)) return url
+  parsed.hostname = '127.0.0.1'
+  return parsed.href
+}
+
 /**
  * The source map Metro serves beside a bundle: `.bundle` becomes `.map`, the options stay, and the
  * sources' text, which only the lookup's caller has, is left out.
  */
 export async function bundleMap(bundleUrl, fetchImpl = fetch) {
-  const url = new URL(bundleUrl)
+  const url = new URL(onMac(bundleUrl))
   url.pathname = url.pathname.replace(/\.bundle(?=\/|$)/, '.map')
   // Expo Go passes the bundle's options in the path, after `//&`.
   if (url.pathname.includes('//&')) url.pathname += '&excludeSource=true'
@@ -127,7 +139,7 @@ export async function bundleMap(bundleUrl, fetchImpl = fetch) {
 
 async function symbolicate(frames, fetchImpl) {
   const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stack: frames }) }
-  return (await fetchJson(`${new URL(frames[0].file).origin}/symbolicate`, init, 5000, fetchImpl)).stack ?? []
+  return (await fetchJson(`${new URL(onMac(frames[0].file)).origin}/symbolicate`, init, 5000, fetchImpl)).stack ?? []
 }
 
 /** The frames in the app's sources: from a kept map when there is one for their bundle, else from Metro. */

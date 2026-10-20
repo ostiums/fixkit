@@ -64,6 +64,18 @@ export async function pickDevice(serials, { os, sdkOf }) {
   return { serial: matching.length === 1 ? matching[0] : null, online }
 }
 
+/**
+ * A Flutter app's VM service as the Mac reaches it: the app knows the device's port, which
+ * `flutter run` forwards from one of the Mac's. Null when no forward leads there.
+ */
+export function macVmService(vmService, forwards) {
+  const url = new URL(vmService)
+  const forward = forwards.find(one => String(one.device) === url.port)
+  if (!forward) return null
+  url.port = String(forward.host)
+  return url.href
+}
+
 /** Whether an Android emulator runs on this Mac: its process is qemu's. */
 export async function emulatorRunning() {
   try {

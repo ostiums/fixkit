@@ -1,22 +1,23 @@
 // node --test mod/tests/*.node.test.mjs: the receiver as a process, with Swift and React Native reports.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
 import { NO_APP, NOT_RUNNING } from '../server/flutter.mjs'
+import { adbCalls, deviceList, fakeAdb } from './fake-adb.mjs'
 import { startReceiver, until } from './receiver.mjs'
 
-/** The receiver in a folder of its own on a free port, with its stdout as JSON events. */
-async function receiver() {
+/** The receiver in a folder of its own on a free port, with its stdout as JSON events; `adb` is a fake one. */
+async function receiver(adb = null) {
   const cwd = mkdtempSync(join(tmpdir(), 'fixkit-'))
   const child = spawn(process.execPath, [new URL('../server/receiver.mjs', import.meta.url).pathname], {
     cwd,
-    // No AXe on this PATH or in this HOME's npx cache, so the lookup answers at once.
-    env: { ...process.env, FIXKIT_PORT: '0', PATH: '/usr/bin:/bin', HOME: cwd },
+    // No AXe on this PATH or in this HOME's npx cache, so the lookup answers at once; no adb but the fake.
+    env: { ...process.env, FIXKIT_PORT: '0', PATH: '/usr/bin:/bin', HOME: cwd, FIXKIT_ADB: adb ?? join(cwd, 'no-adb') },
   })
   const events = []
   let pending = ''
@@ -38,8 +39,8 @@ async function receiver() {
 }
 
 /** Posts a report to a fresh receiver, after `before(base)`, and returns the one it emits. */
-async function deliver(sent, before = async () => {}) {
-  const { base, events, until, stop } = await receiver()
+async function deliver(sent, before = async () => {}, adb = null) {
+  const { base, events, until, stop } = await receiver(adb)
   try {
     await before(base)
     const answer = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(sent) })
@@ -162,4 +163,112 @@ test('a reload goes to the VM service the Flutter app sent at launch', async t =
 
   await receiver.post('/launched', { vmService: 'http://127.0.0.1:9/x=/' })
   assert.deepEqual(await receiver.post('/reload', { restart: true }), { ok: false, error: NOT_RUNNING })
+})
+
+// Android, through a fake adb.
+
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff])
+const adbFolder = () => mkdtempSync(join(tmpdir(), 'fixkit-adb-'))
+// A text at 0,20 to 100,40 in the app's units, at a pixel ratio of 2.
+const NAME_DUMP =
+  '<?xml version="1.0" ?><hierarchy rotation="0"><node class="android.widget.FrameLayout" text="" content-desc="" resource-id="" bounds="[0,0][1080,2400]">' +
+  '<node class="android.widget.TextView" text="Alex Morgan" content-desc="" resource-id="" bounds="[0,40][200,80]" /></node></hierarchy>'
+const androidReport = fields => ({
+  platform: 'android',
+  os: '36',
+  pixelRatio: 2,
+  comment: 'The name is cut off',
+  screen: '',
+  touch: { x: 20, y: 30 },
+  ...fields,
+})
+const reversed = (dir, serial) => adbCalls(dir).filter(args => args[1] === serial && args[2] === 'reverse')
+
+test('the receiver keeps its port reversed on every Android device, one that comes later too', async t => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554') })
+  const receiver = await startReceiver({ env: { FIXKIT_ADB: adb } })
+  t.after(receiver.stop)
+
+  await until(() => reversed(dir, 'emulator-5554').length > 0, 'the first reverse')
+  assert.deepEqual(reversed(dir, 'emulator-5554')[0].slice(2), ['reverse', `tcp:${receiver.port}`, `tcp:${receiver.port}`])
+
+  fakeAdb(dir, { devices: deviceList('emulator-5554', 'emulator-5556') })
+  for (let waited = 0; reversed(dir, 'emulator-5556').length === 0; waited += 100) {
+    if (waited > 6000) assert.fail('the second device was never reversed')
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  assert.equal(reversed(dir, 'emulator-5554').length, 1)
+})
+
+test("an Android report gets its device's screenshot and what accessibility says, in the app's units", async () => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), dump: NAME_DUMP, png: PNG })
+  const report = await deliver(androidReport(), undefined, adb)
+
+  assert.equal(report.device, 'emulator-5554')
+  assert.equal(report.screenshot, join('.fixkit', 'reports', 'r1.png'))
+  assert.equal(report.accessibility.element.label, 'Alex Morgan')
+})
+
+test('a dump that fails leaves the Android report its screenshot', async () => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), dump: null, png: PNG })
+  const report = await deliver(androidReport(), undefined, adb)
+
+  assert.equal(report.accessibility, null)
+  assert.equal(report.screenshot, join('.fixkit', 'reports', 'r1.png'))
+})
+
+test("a Flutter app's report names its device through the VM service the device forwards", async () => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, {
+    devices: deviceList('emulator-5554', 'emulator-5556'),
+    forwards: 'emulator-5556 tcp:52361 tcp:43123\n',
+    sdk: { 'emulator-5554': '36', 'emulator-5556': '36' },
+    dump: NAME_DUMP,
+    png: PNG,
+  })
+  const report = await deliver(androidReport({ os: '6.6.30', vmService: 'http://127.0.0.1:43123/x=/' }), undefined, adb)
+
+  assert.equal(report.device, 'emulator-5556')
+})
+
+test('two Android devices on one API level: no screenshot, and the advice once', async t => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, {
+    devices: deviceList('emulator-5554', 'emulator-5556'),
+    sdk: { 'emulator-5554': '36', 'emulator-5556': '36' },
+    png: PNG,
+  })
+  const { base, events, until: untilEvent, stop } = await receiver(adb)
+  t.after(stop)
+
+  for (const id of ['r1', 'r2']) {
+    const answer = await fetch(`${base}/report`, { method: 'POST', body: JSON.stringify(androidReport()) })
+    assert.equal((await answer.json()).id, id)
+  }
+  await untilEvent(() => events.filter(event => event.type === 'report').length === 2)
+
+  assert.equal(events.find(event => event.type === 'report').report.screenshot, null)
+  assert.equal(events.filter(event => event.type === 'notice' && event.message.includes('per API level')).length, 1)
+})
+
+test('an iOS report never asks adb for a screenshot or the screen', async () => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), dump: NAME_DUMP, png: PNG })
+  await deliver(rnReport({}), undefined, adb)
+
+  const asked = adbCalls(dir).map(args => args.join(' '))
+  assert.ok(!asked.some(call => call.includes('screencap') || call.includes('uiautomator')))
+})
+
+test("a reload of a Flutter app on Android without its port forwarded finds it not running", async t => {
+  const dir = adbFolder()
+  const adb = fakeAdb(dir, { devices: deviceList('emulator-5554'), forwards: '' })
+  const receiver = await startReceiver({ env: { FIXKIT_ADB: adb } })
+  t.after(receiver.stop)
+
+  await receiver.post('/launched', { vmService: 'http://127.0.0.1:43123/x=/', platform: 'android' })
+  assert.deepEqual(await receiver.post('/reload', {}), { ok: false, error: NOT_RUNNING })
 })
