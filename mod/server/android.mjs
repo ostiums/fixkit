@@ -69,7 +69,7 @@ export async function pickDevice(serials, { os, sdkOf }) {
  * knows the device's port, which `flutter run` forwards from one of the Mac's; after, the address
  * it gives is DDS's, on the Mac already, and no forward leads there.
  */
-export function macVmService(vmService, forwards) {
+export function forwardedVmService(vmService, forwards) {
   const url = new URL(vmService)
   const forward = forwards.find(one => String(one.device) === url.port)
   if (!forward) return vmService
@@ -93,6 +93,7 @@ export class Adb {
     this.path = path
   }
 
+  /** adb's output for `args`, on device `serial` when given. */
   async call(args, { serial, timeout = 10_000, encoding = 'utf8' } = {}) {
     const { stdout } = await run(this.path, serial ? ['-s', serial, ...args] : args, {
       timeout,
@@ -102,14 +103,17 @@ export class Adb {
     return stdout
   }
 
+  /** The serials of the devices online. */
   async devices() {
     return parseDevices(await this.call(['devices']))
   }
 
+  /** The ports forwarded from the Mac to a device. */
   async forwards() {
     return parseForwards(await this.call(['forward', '--list']))
   }
 
+  /** The device's API level, `36`, or null. */
   async sdkOf(serial) {
     return (await this.call(['shell', 'getprop', 'ro.build.version.sdk'], { serial })).trim() || null
   }
@@ -123,10 +127,12 @@ export class Adb {
       .map(Number)
   }
 
+  /** Lets the device reach the Mac's `port` at its own 127.0.0.1. */
   async reverse(serial, port) {
     await this.call(['reverse', `tcp:${port}`, `tcp:${port}`], { serial })
   }
 
+  /** Writes the device's screen to `path` as a PNG. */
   async screencap(serial, path) {
     writeFileSync(path, await this.call(['exec-out', 'screencap', '-p'], { serial, encoding: 'buffer' }))
   }

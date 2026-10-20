@@ -20,9 +20,9 @@ export function freePort() {
   })
 }
 
-/** Waits for `check` to return something, trying every 20 ms for up to 3 s. */
-export async function until(check, what = 'the receiver') {
-  for (let waited = 0; waited < 3000; waited += 20) {
+/** Waits for `check` to return something, trying every 20 ms for up to `timeout` ms. */
+export async function until(check, what = 'the receiver', timeout = 3000) {
+  for (let waited = 0; waited < timeout; waited += 20) {
     const value = await check()
     if (value) return value
     await new Promise(resolve => setTimeout(resolve, 20))

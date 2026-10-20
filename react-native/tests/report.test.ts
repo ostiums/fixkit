@@ -55,8 +55,8 @@ test('an element without a frame keeps its name, and an empty first stack keeps 
 })
 
 test("the composer sits above the keyboard, and on Android above the navigation bar when there's none", () => {
-  assert.equal(composerBottom(300, 'ios'), 310)
-  assert.equal(composerBottom(0, 'ios'), 10)
-  assert.equal(composerBottom(300, 'android'), 310)
-  assert.equal(composerBottom(0, 'android'), 58)
+  assert.equal(composerBottom(300, false), 310)
+  assert.equal(composerBottom(0, false), 10)
+  assert.equal(composerBottom(300, true), 310)
+  assert.equal(composerBottom(0, true), 58)
 })

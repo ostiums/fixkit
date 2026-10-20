@@ -4,7 +4,6 @@
 // Metro's /symbolicate answers for the bundle as it is now, which after a Fast Refresh is lines away
 // from the code the app still runs, so the map of the bundle the app launched with is kept and read
 // first. No dependencies.
-import { join } from 'node:path'
 
 /** The bundle frames of one stack, `at name (url:line:column)`; native and anonymous frames go. */
 export function parseStack(stack) {
@@ -117,11 +116,14 @@ async function fetchJson(url, init, timeout, fetchImpl) {
 // its own loopback that adb reverses to the Mac's.
 const LOOPBACK_ALIASES = new Set(['10.0.2.2', '10.0.3.2', 'localhost'])
 
-/** A URL an app names Metro by, as the receiver on the Mac reaches it. */
+/**
+ * A bundle URL an app names Metro by, as the receiver on the Mac asks for it: at the Mac's loopback,
+ * and with absolute paths where an Android app's asks for paths from Metro's project root
+ * (`/[metro-project]/…`).
+ */
 export function onMac(url) {
-  const parsed = new URL(url)
-  if (!LOOPBACK_ALIASES.has(parsed.hostname)) return url
-  parsed.hostname = '127.0.0.1'
+  const parsed = new URL(url.replace('sourcePaths=url-server', 'sourcePaths=absolute'))
+  if (LOOPBACK_ALIASES.has(parsed.hostname)) parsed.hostname = '127.0.0.1'
   return parsed.href
 }
 
@@ -139,8 +141,10 @@ export async function bundleMap(bundleUrl, fetchImpl = fetch) {
 }
 
 async function symbolicate(frames, fetchImpl) {
-  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stack: frames }) }
-  return (await fetchJson(`${new URL(onMac(frames[0].file)).origin}/symbolicate`, init, 5000, fetchImpl)).stack ?? []
+  // Metro reads each frame's bundle options from its URL, the source paths among them.
+  const stack = frames.map(frame => ({ ...frame, file: onMac(frame.file) }))
+  const init = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stack }) }
+  return (await fetchJson(`${new URL(stack[0].file).origin}/symbolicate`, init, 5000, fetchImpl)).stack ?? []
 }
 
 /** The frames in the app's sources: from a kept map when there is one for their bundle, else from Metro. */
@@ -157,22 +161,15 @@ async function locate(frames, maps, fetchImpl) {
   return kept.map(frame => frame ?? answered[next++] ?? {})
 }
 
-// How Metro names a file from its project root when the bundle asks for sourcePaths=url-server, as
-// an Android app's does.
-const PROJECT = '/[metro-project]/'
-
-/** A file Metro named, on disk: from the project root, which is the receiver's, when Metro named it from there. */
-const onDisk = (file, root) => (file?.startsWith(PROJECT) ? join(root, file.slice(PROJECT.length)) : file)
-
 /**
  * Where the pressed element's JSX is written (`source`) and where the components around it are
  * used (`usedAt`, nearest first): the first stack is the element's, the others its owners'. `maps`
  * holds the maps of the bundles apps launched with, or promises of them, by bundle URL.
  */
-export async function sourcesFor(stacks, { maps = new Map(), fetchImpl = fetch, root = process.cwd() } = {}) {
+export async function sourcesFor(stacks, { maps = new Map(), fetchImpl = fetch } = {}) {
   const parsed = stacks.map(parseStack)
   // One lookup for every stack: one request to Metro at most.
-  const located = (await locate(parsed.flat(), maps, fetchImpl)).map(frame => ({ ...frame, file: onDisk(frame.file, root) }))
+  const located = await locate(parsed.flat(), maps, fetchImpl)
   let next = 0
   const found = parsed.map(frames => {
     const mine = located.slice(next, (next += frames.length))

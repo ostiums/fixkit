@@ -21,12 +21,13 @@ import { cancel, send, setDraft, setLift, type SessionState } from './session'
 
 // FixKit's tint, the Swift package's own.
 const TINT = '#D97857'
+const ANDROID = Platform.OS === 'android'
 // Below the status bar: an iPhone's with a Dynamic Island, as React Native has no safe-area insets of
 // its own, or Android's, whose height it does give.
-const BANNER_TOP = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 10 : 60
+const BANNER_TOP = ANDROID ? (StatusBar.currentHeight ?? 0) + 10 : 60
 // Android sends no will-events: its keyboard says so once it is up or gone.
-const KEYBOARD_SHOWN = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow'
-const KEYBOARD_HIDDEN = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide'
+const KEYBOARD_SHOWN = ANDROID ? 'keyboardDidShow' : 'keyboardWillShow'
+const KEYBOARD_HIDDEN = ANDROID ? 'keyboardDidHide' : 'keyboardWillHide'
 
 /** FixKit's views above the app: the outline for a screenshot, the composer, the banner. */
 export function Overlay({ state }: { state: SessionState }) {
@@ -109,7 +110,7 @@ function Composer({ target, canSend, lift }: { target: Target; canSend: boolean;
       )}
       {/* Takes the touches that miss its field and button, which would otherwise cancel. */}
       <View
-        style={[styles.composer, { bottom: composerBottom(keyboard, Platform.OS) }]}
+        style={[styles.composer, { bottom: composerBottom(keyboard, ANDROID) }]}
         onStartShouldSetResponder={() => true}
         onLayout={event => setLift(liftFor(elementBottom, event.nativeEvent.layout.y))}
       >

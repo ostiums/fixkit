@@ -7,8 +7,8 @@ const ANDROID_NAVIGATION_BAR = 48
 const COMPOSER_GAP = 10
 
 /** How far above the bottom of the screen the composer sits, with `keyboard` points of keyboard under it. */
-export function composerBottom(keyboard: number, os: string) {
-  return (keyboard > 0 || os !== 'android' ? keyboard : ANDROID_NAVIGATION_BAR) + COMPOSER_GAP
+export function composerBottom(keyboard: number, android: boolean) {
+  return (keyboard > 0 || !android ? keyboard : ANDROID_NAVIGATION_BAR) + COMPOSER_GAP
 }
 
 /** How far the app slides up so the pressed element stays 28 pt above the composer. */

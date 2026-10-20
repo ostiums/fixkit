@@ -194,10 +194,8 @@ test('the receiver keeps its port reversed on every Android device, one that com
   assert.deepEqual(reversed(dir, 'emulator-5554')[0].slice(2), ['reverse', `tcp:${receiver.port}`, `tcp:${receiver.port}`])
 
   fakeAdb(dir, { devices: deviceList('emulator-5554', 'emulator-5556') })
-  for (let waited = 0; reversed(dir, 'emulator-5556').length === 0; waited += 100) {
-    if (waited > 6000) assert.fail('the second device was never reversed')
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  // The receiver looks for devices every 2 s.
+  await until(() => reversed(dir, 'emulator-5556').length > 0, 'the second device’s reverse', 6000)
   assert.equal(reversed(dir, 'emulator-5554').length, 1)
 })
 
@@ -209,10 +207,7 @@ test('a restart of the adb server, which drops every reverse, gets the port reve
   await until(() => reversed(dir, 'emulator-5554').length === 1, 'the first reverse')
 
   restartAdbServer(dir)
-  for (let waited = 0; reversed(dir, 'emulator-5554').length < 2; waited += 100) {
-    if (waited > 6000) assert.fail('the port was never reversed again')
-    await new Promise(resolve => setTimeout(resolve, 100))
-  }
+  await until(() => reversed(dir, 'emulator-5554').length === 2, 'the reverse after the restart', 6000)
 })
 
 test("an Android report gets its device's screenshot and what accessibility says, in the app's units", async () => {

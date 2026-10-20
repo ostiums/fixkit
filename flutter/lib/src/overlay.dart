@@ -42,7 +42,10 @@ class FixKitOverlay extends StatelessWidget {
 
 /// How far above the bottom of the screen the composer sits: above the keyboard, or with none above
 /// the screen's own bottom inset, Android's navigation bar or the home indicator.
-double composerBottom(double keyboard, double inset) => (keyboard > 0 ? keyboard : inset) + _panelGap;
+double composerBottom(BuildContext context) {
+  final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+  return (keyboard > 0 ? keyboard : MediaQuery.paddingOf(context).bottom) + _panelGap;
+}
 
 /// How far the host slides the app up so the composer, above the keyboard, does not cover the
 /// pressed element.
@@ -109,7 +112,7 @@ class _ComposerState extends State<_Composer> with SingleTickerProviderStateMixi
     final session = widget.session;
     final target = widget.target;
     final size = MediaQuery.sizeOf(context);
-    final bottom = composerBottom(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.paddingOf(context).bottom);
+    final bottom = composerBottom(context);
     final frame = target.element?.frame;
     final lift = composerLift(target, size, bottom);
     final lit = spotlight(frame, target.touch, lift);

@@ -43,7 +43,7 @@ Map<String, Object> reportBody(
   String comment, {
   required String os,
   String? simulator,
-  String? platform,
+  bool android = false,
   double? pixelRatio,
 }) {
   final element = target.element;
@@ -51,7 +51,7 @@ Map<String, Object> reportBody(
   return {
     'os': os,
     'simulator': ?simulator,
-    'platform': ?platform,
+    if (android) 'platform': 'android',
     'pixelRatio': ?pixelRatio,
     'comment': comment,
     'screen': '',

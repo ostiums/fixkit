@@ -14,7 +14,7 @@ import { createServer } from 'node:http'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { Adb, adbCandidates, emulatorRunning, macVmService, pickDevice } from './android.mjs'
+import { Adb, adbCandidates, emulatorRunning, forwardedVmService, pickDevice } from './android.mjs'
 import { NO_APP, reload } from './flutter.mjs'
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
 import { bundleMap, parseStack, sourcesFor, withSources } from './metro.mjs'
@@ -78,17 +78,18 @@ function keepMap(stack) {
   maps.set(bundle, map)
 }
 
-// Said once: with two simulators booted on one iOS version, a report that names none cannot tell which is its own.
-let toldSimulator = false
+// The advice already given, by subject: each is said once a run.
+const told = new Set()
+const tellOnce = (subject, message) => told.has(subject) || (told.add(subject), emit({ type: 'notice', message }))
 
 /** The simulator a report came from: its own word, else the one booted on its iOS version. */
 async function simulatorOf(report) {
   if (report.simulator) return report.simulator
   const { udid, booted } = await bootedSimulator(report.os).catch(() => ({ udid: null, booted: 0 }))
-  if (udid === null && booted > 1 && !toldSimulator) {
-    toldSimulator = true
+  // With two simulators booted on one iOS version, a report that names none cannot tell which is its own.
+  if (udid === null && booted > 1) {
     const on = report.os ? ` on iOS ${report.os}` : ''
-    emit({ type: 'notice', message: `Boot one simulator per iOS version: ${booted} run${on}, so reports come without a screenshot or what accessibility says` })
+    tellOnce('simulator', `Boot one simulator per iOS version: ${booted} run${on}, so reports come without a screenshot or what accessibility says`)
   }
   return udid
 }
@@ -108,21 +109,16 @@ async function findAdb() {
   return null
 }
 
-// Said once: without adb an Android app never reaches the receiver, so nothing else would tell.
-let toldAdb = false
-
 /**
  * Reverses the receiver's port on every Android device adb lists, so the app reaches it at
- * 127.0.0.1 as in the simulator. It runs at start and every two seconds, for an emulator booted later.
+ * 127.0.0.1 as in the simulator. False when there is no adb to do it with.
  */
 async function keepReversed(port) {
   const tool = await findAdb()
   if (tool === null) {
-    if (!toldAdb && (await emulatorRunning())) {
-      toldAdb = true
-      emit({ type: 'notice', message: 'Install the Android SDK platform-tools so Android apps reach FixKit: adb was not found' })
-    }
-    return
+    // Without adb an Android app never reaches the receiver, so nothing else would tell.
+    if (await emulatorRunning()) tellOnce('adb', 'Install the Android SDK platform-tools so Android apps reach FixKit: adb was not found')
+    return false
   }
   let serials
   try {
@@ -130,7 +126,7 @@ async function keepReversed(port) {
   } catch (error) {
     log(`adb: ${error.message}`)
     adb = null
-    return
+    return false
   }
   // Asked of the device each time: an emulator restarted, or a restart of the adb server, drops
   // the reverse while the device stays listed.
@@ -139,13 +135,13 @@ async function keepReversed(port) {
     if (ports.includes(port)) continue
     await tool.reverse(serial, port).catch(error => log(`adb reverse on ${serial}: ${error.message}`))
   }
+  return true
 }
 
-let reversing = null
-const reverseNow = port => (reversing ??= keepReversed(port).finally(() => (reversing = null)))
-
-// Said once: with two Android devices on one API level, a report that names none cannot tell which is its own.
-let toldDevice = false
+/** Keeps the port reversed from now on: every 2 s for an emulator booted later, every 30 s while there is no adb. */
+function reverseFromNowOn(port) {
+  void keepReversed(port).then(found => setTimeout(() => reverseFromNowOn(port), found ? 2000 : 30_000).unref())
+}
 
 /** The Android device a report came from: the only one online, or the only one on the app's API level. */
 async function deviceOf(report) {
@@ -153,9 +149,9 @@ async function deviceOf(report) {
   if (tool === null) return null
   const serials = await tool.devices()
   const { serial, online } = await pickDevice(serials, { os: report.os, sdkOf: one => tool.sdkOf(one) })
-  if (serial === null && online > 1 && !toldDevice) {
-    toldDevice = true
-    emit({ type: 'notice', message: `Run one Android emulator per API level, one at a time for Flutter: ${online} run, so reports come without a screenshot or what accessibility says` })
+  // With two Android devices on one API level, a report cannot tell which is its own.
+  if (serial === null && online > 1) {
+    tellOnce('device', `Run one Android emulator per API level, one at a time for Flutter: ${online} run, so reports come without a screenshot or what accessibility says`)
   }
   return serial
 }
@@ -252,7 +248,7 @@ async function prepare({ screenshotPNG, stacks, ...sent }, id) {
 /** The Flutter app's VM service as the Mac reaches it: on Android, through the forward `flutter run` keeps. */
 async function vmServiceOnMac({ vmService, android }) {
   const tool = android ? await findAdb() : null
-  return tool === null ? vmService : macVmService(vmService, await tool.forwards().catch(() => []))
+  return tool === null ? vmService : forwardedVmService(vmService, await tool.forwards().catch(() => []))
 }
 
 /** A request's body as text. */
@@ -386,6 +382,5 @@ server.listen(PORT, '127.0.0.1', () => {
   mkdirSync(reportsDir, { recursive: true })
   const { port } = server.address()
   emit({ type: 'ready', port })
-  void reverseNow(port)
-  setInterval(() => void reverseNow(port), 2000).unref()
+  reverseFromNowOn(port)
 })

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { Adb, adbCandidates, macVmService, parseDevices, parseForwards, pickDevice } from '../server/android.mjs'
+import { Adb, adbCandidates, forwardedVmService, parseDevices, parseForwards, pickDevice } from '../server/android.mjs'
 import { adbCalls, deviceList, fakeAdb } from './fake-adb.mjs'
 
 const folder = () => mkdtempSync(join(tmpdir(), 'fixkit-adb-'))
@@ -55,13 +55,13 @@ test('forwards of tcp ports, by device', () => {
 test("a Flutter app's VM service on the device is reached through the Mac's port forwarded to it", () => {
   const forwards = [{ serial: 'emulator-5554', host: 52361, device: 43123 }]
 
-  assert.equal(macVmService('http://127.0.0.1:43123/abc=/', forwards), 'http://127.0.0.1:52361/abc=/')
+  assert.equal(forwardedVmService('http://127.0.0.1:43123/abc=/', forwards), 'http://127.0.0.1:52361/abc=/')
 })
 
 test("DDS's address, which the app gives once flutter run attached it, is on the Mac already", () => {
   const forwards = [{ serial: 'emulator-5554', host: 52361, device: 43123 }]
 
-  assert.equal(macVmService('http://127.0.0.1:56221/dds=/', forwards), 'http://127.0.0.1:56221/dds=/')
+  assert.equal(forwardedVmService('http://127.0.0.1:56221/dds=/', forwards), 'http://127.0.0.1:56221/dds=/')
 })
 
 test('the only device online, without asking its API level', async () => {
