@@ -15,6 +15,14 @@ class ReportStatus {
   final String agent;
 }
 
+/// The receiver's answer to a report: the id it gave it and the agent it went to.
+class Receipt {
+  const Receipt(this.id, this.agent);
+
+  final String id;
+  final String agent;
+}
+
 /// The receiver's HTTP API on 127.0.0.1, one connection per call.
 class Client {
   final _base = Uri.parse('http://127.0.0.1:$_port');
@@ -44,12 +52,12 @@ class Client {
     return ReportStatus(map['id'] as String?, map['status'] as String?, map['agent'] as String? ?? 'Claude Code');
   }
 
-  /// Sends the report and returns its receipt: the id, no status yet, and the agent. The receiver
-  /// answers once it has read the screen.
-  Future<ReportStatus> sendReport(Map<String, Object> body) async {
-    final receipt = _status(await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20)));
-    if (receipt.id == null) throw const FormatException('the receipt has no id');
-    return receipt;
+  /// Sends the report and returns its receipt. The receiver answers once it has read the screen.
+  Future<Receipt> sendReport(Map<String, Object> body) async {
+    final answer = _status(await _call('POST', '/report', body: body, timeout: const Duration(seconds: 20)));
+    final id = answer.id;
+    if (id == null) throw const FormatException('the receipt has no id');
+    return Receipt(id, answer.agent);
   }
 
   /// Where the report is now.
