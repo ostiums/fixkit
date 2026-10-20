@@ -38,7 +38,7 @@ class _DebugHostState extends State<DebugHost> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _session.announceLaunch());
   }
 
-  // A hot reload reassembles the tree: the app now runs the code Claude saved. A hot restart runs
+  // A hot reload reassembles the tree: the app now runs the code the agent saved. A hot restart runs
   // initState again instead.
   @override
   void reassemble() {
