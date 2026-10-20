@@ -73,7 +73,7 @@ final class FixSession {
                 await follow(receipt.id)
             } catch {
                 isSending = false
-                show(Banner(text: "FixKit is not listening", symbol: "wifi.slash"), for: 4)
+                show(Banner(text: FixBanners.notListening, symbol: "wifi.slash"), for: 4)
             }
         }
     }
@@ -106,7 +106,8 @@ final class FixSession {
         let key = "\(fix.run)/\(fix.id ?? "")"
         guard UserDefaults.standard.string(forKey: "fixkit.announced") != key else { return }
         UserDefaults.standard.set(key, forKey: "fixkit.announced")
-        show(Banner(text: FixBanners.fixed(by: FixBanners.agent(from: fix.agent)), symbol: "checkmark.circle.fill"), for: 4)
+        let agent = FixBanners.agent(from: fix.agent)
+        show(Banner(text: FixBanners.fixed(by: agent), symbol: "checkmark.circle.fill"), for: 4)
     }
 
     private func follow(_ id: String) async {
@@ -155,6 +156,9 @@ enum FixBanners {
     static func fixing(by agent: String) -> String { "\(agent) is fixing it" }
     static func fixed(by agent: String) -> String { "Fixed by \(agent)" }
     static func stopped(by agent: String) -> String { "Not rebuilt: see \(agent)" }
+
+    /// The receiver did not answer, so it cannot say which agent it works for.
+    static let notListening = "FixKit is not listening"
 }
 
 struct FixKitHostModifier: ViewModifier {

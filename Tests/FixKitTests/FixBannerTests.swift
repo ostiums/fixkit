@@ -10,6 +10,10 @@ struct FixBannerTests {
         #expect(FixBanners.queued(in: "Codex") == "Queued in Codex")
     }
 
+    @Test func aReceiverThatDoesNotAnswerCannotNameItsAgent() {
+        #expect(FixBanners.notListening == "FixKit is not listening")
+    }
+
     @Test func anAnswerWithoutAnAgentIsClaudeCode() {
         #expect(FixBanners.agent(from: nil) == "Claude Code")
         #expect(FixBanners.agent(from: "Codex") == "Codex")
