@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { Adb, adbCandidates, parseDevices, parseForwards, pickDevice } from '../server/android.mjs'
+import { Adb, adbCandidates, macVmService, parseDevices, parseForwards, pickDevice } from '../server/android.mjs'
 import { adbCalls, deviceList, fakeAdb } from './fake-adb.mjs'
 
 const folder = () => mkdtempSync(join(tmpdir(), 'fixkit-adb-'))
@@ -50,6 +50,13 @@ test('forwards of tcp ports, by device', () => {
   const listed = 'emulator-5554 tcp:52361 tcp:43123\nemulator-5554 tcp:8000 localabstract:x\n'
 
   assert.deepEqual(parseForwards(listed), [{ serial: 'emulator-5554', host: 52361, device: 43123 }])
+})
+
+test("a Flutter app's VM service on the device is reached through the Mac's port forwarded to it", () => {
+  const forwards = [{ serial: 'emulator-5554', host: 52361, device: 43123 }]
+
+  assert.equal(macVmService('http://127.0.0.1:43123/abc=/', forwards), 'http://127.0.0.1:52361/abc=/')
+  assert.equal(macVmService('http://127.0.0.1:40000/abc=/', forwards), null)
 })
 
 test('the only device online, without asking its API level', async () => {

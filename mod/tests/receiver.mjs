@@ -35,7 +35,8 @@ export async function startReceiver({ args = [], env = {}, cwd = project() } = {
   const port = await freePort()
   const child = spawn(process.execPath, [RECEIVER, ...args], {
     cwd,
-    env: { ...process.env, FIXKIT_PORT: String(port), ...env },
+    // No adb unless the test brings a fake: a real emulator must not get the test's port reversed.
+    env: { ...process.env, FIXKIT_PORT: String(port), FIXKIT_ADB: join(cwd, 'no-adb'), ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   const lines = []

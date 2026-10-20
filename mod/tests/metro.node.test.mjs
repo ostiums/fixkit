@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { appFrame, bundleMap, decodeMap, originalPosition, parseStack, sourcesFor, withSources } from '../server/metro.mjs'
+import { appFrame, bundleMap, decodeMap, onMac, originalPosition, parseStack, sourcesFor, withSources } from '../server/metro.mjs'
 
 const BUNDLE = 'http://127.0.0.1:8081/index.ts.bundle//&platform=ios&dev=true'
 const stack = (...frames) => ['Error: react-stack-top-frame', ...frames].join('\n')
@@ -126,6 +126,21 @@ test("the bundle's own map is fetched from beside it, with its options kept and 
     'http://127.0.0.1:8081/index.map?platform=ios&dev=true&excludeSource=true',
     'http://127.0.0.1:8081/index.ts.map//&platform=ios&dev=true&excludeSource=true',
   ])
+})
+
+test("an Android app's bundle on the emulator's alias for the Mac is read from the Mac's loopback", async () => {
+  assert.equal(onMac('http://10.0.2.2:8081/index.bundle?platform=android'), 'http://127.0.0.1:8081/index.bundle?platform=android')
+  assert.equal(onMac('http://localhost:8081/index.bundle'), 'http://127.0.0.1:8081/index.bundle')
+  assert.equal(onMac('http://192.168.1.5:8081/index.bundle'), 'http://192.168.1.5:8081/index.bundle')
+
+  const asked = []
+  const fetchImpl = async url => {
+    asked.push(url)
+    return { ok: true, json: async () => SOURCE_MAP }
+  }
+  await bundleMap('http://10.0.2.2:8081/index.bundle?platform=android', fetchImpl)
+
+  assert.deepEqual(asked, ['http://127.0.0.1:8081/index.map?platform=android&excludeSource=true'])
 })
 
 test('frames of a bundle whose map was kept at launch are read from that map, the others from Metro', async () => {
