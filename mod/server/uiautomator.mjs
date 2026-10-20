@@ -20,14 +20,14 @@ function frameOf(bounds, ratio) {
 function element(attributes, ratio) {
   const text = attributes.text || null
   const description = attributes['content-desc'] || null
-  // Android's own views (`android:id/content`) are no part of the app.
-  const id = attributes['resource-id']?.startsWith('android:') ? null : attributes['resource-id'] || null
+  const id = attributes['resource-id'] || null
   return {
     type: attributes.class?.split('.').at(-1) || 'View',
     AXLabel: description ?? text,
     AXValue: description && text && text !== description ? text : null,
-    // `package:id/name`: the name is what the app set, a testID or a semantics identifier.
-    AXUniqueId: id?.includes(':id/') ? id.slice(id.indexOf(':id/') + 4) : id,
+    // A testID or a semantics identifier comes as it was set; `package:id/name` is an id of
+    // Android's layouts (`android:id/content`, AppCompat's action bar), no part of the app.
+    AXUniqueId: id?.includes(':id/') ? null : id,
     frame: frameOf(attributes.bounds, ratio),
     children: [],
   }

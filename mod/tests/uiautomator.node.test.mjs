@@ -40,9 +40,9 @@ test('a description is the label; a text beside one is the value', () => {
   assert.deepEqual([balance.AXLabel, balance.AXValue], ['Balance', '€5'])
 })
 
-test("an id loses its package, so FixKit's own banner is never what was pressed", () => {
+test("an app's own identifier is the id, so FixKit's own banner is never what was pressed", () => {
   const banner = node(
-    { 'resource-id': 'com.fixkit.example:id/fixkit.banner', bounds: '[0,0][1080,200]' },
+    { 'resource-id': 'fixkit.banner', bounds: '[0,0][1080,200]' },
     node({ class: 'android.widget.TextView', text: 'Sent to Claude Code', bounds: '[100,50][900,150]' }),
   )
   const tree = parseHierarchy(dump(banner), 1)
@@ -69,14 +69,38 @@ test('the lookup finds a nested text and the labels in its row', () => {
   assert.deepEqual(found.nearby, ['Northwind GmbH'])
 })
 
-test("Android's own views are not named by their ids: the content frame is no control around anything", () => {
+test("the ids of Android's layouts name nothing: the content frame is no control around anything", () => {
   const tree = parseHierarchy(
-    dump(node({ 'resource-id': 'android:id/content', bounds: '[0,0][1080,2400]' }, node({ text: 'Hi', bounds: '[0,0][100,100]' }))),
+    dump(
+      node(
+        { 'resource-id': 'android:id/content', bounds: '[0,0][1080,2400]' },
+        node({ 'resource-id': 'com.fixkit.example:id/action_bar_root', bounds: '[0,0][1080,2400]' }, node({ text: 'Hi', bounds: '[0,0][100,100]' })),
+      ),
+    ),
     1,
   )
+  const content = tree[0].children[0]
 
-  assert.equal(tree[0].children[0].AXUniqueId, null)
+  assert.deepEqual([content.AXUniqueId, content.children[0].AXUniqueId], [null, null])
   assert.equal(elementAt(tree, { x: 50, y: 50 }).within, null)
+})
+
+// Dumped from react-native/example on a Pixel 8 emulator (2.625 pixels a point).
+const rnScreen = parseHierarchy(readFileSync(new URL('./fixtures/android-rn.xml', import.meta.url), 'utf8'), 2.625)
+
+test("a React Native text comes with the labels in its row and nothing of Android's around it", () => {
+  const found = elementAt(rnScreen, { x: 89, y: 273 })
+
+  assert.deepEqual([found.element.type, found.element.label], ['TextView', 'Alex Morgan'])
+  assert.equal(found.within, null)
+  assert.ok(found.nearby.includes('•••• 4021'))
+})
+
+test("a React Native testID is the element's identifier", () => {
+  const found = elementAt(rnScreen, { x: 78, y: 350 })
+
+  assert.equal(found.element.label, 'Send')
+  assert.equal(found.within.identifier, 'quickActions.Send')
 })
 
 // Dumped from flutter/example on a Pixel 8 emulator (2.625 pixels a point), the banner of a queued report on screen.
