@@ -111,7 +111,7 @@ class Session extends ChangeNotifier {
     final os = osVersion(Platform.operatingSystemVersion);
     if (!Platform.isAndroid) return reportBody(pressed, comment, os: os, simulator: simulatorIn(Directory.systemTemp.path));
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    return reportBody(pressed, comment, os: os, platform: 'android', pixelRatio: view?.devicePixelRatio);
+    return reportBody(pressed, comment, os: os, android: true, pixelRatio: view?.devicePixelRatio);
   }
 
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is

@@ -83,8 +83,7 @@ class _DebugHostState extends State<DebugHost> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final target = _session.target;
-    final bottom = composerBottom(MediaQuery.viewInsetsOf(context).bottom, MediaQuery.paddingOf(context).bottom);
-    final lift = target == null ? 0.0 : composerLift(target, MediaQuery.sizeOf(context), bottom);
+    final lift = target == null ? 0.0 : composerLift(target, MediaQuery.sizeOf(context), composerBottom(context));
     return RawGestureDetector(
       behavior: HitTestBehavior.translucent,
       gestures: {

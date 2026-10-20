@@ -68,16 +68,19 @@ test("the element's line comes first, its owners' uses after, from the bundle's 
   assert.deepEqual(asked, ['http://127.0.0.1:8081/symbolicate'])
 })
 
-test("paths Metro gives from the project's root, as for an Android bundle, are the project's files", async () => {
-  // An Android app asks for its bundle with sourcePaths=url-server: Metro names files from its project root.
-  const fetchImpl = async (url, init) => {
-    const { stack } = JSON.parse(init.body)
-    const files = { 1: '/[metro-project]/src/WalletCard.tsx', 2: '/[metro-project]/App.tsx' }
-    return { ok: true, json: async () => ({ stack: stack.map(f => ({ ...f, file: files[f.lineNumber], lineNumber: 11 })) }) }
-  }
-  const found = await sourcesFor([stack(at('WalletCard', 1)), stack(at('App', 2))], { fetchImpl, root: '/app' })
+test("an Android bundle's paths from Metro's project root are asked for as absolute paths", async () => {
+  // An Android app asks for its bundle with sourcePaths=url-server, which names files `/[metro-project]/…`.
+  const android = 'http://10.0.2.2:8081/index.bundle?platform=android&dev=true&sourcePaths=url-server'
+  assert.equal(onMac(android), 'http://127.0.0.1:8081/index.bundle?platform=android&dev=true&sourcePaths=absolute')
 
-  assert.deepEqual(found, { source: { file: '/app/src/WalletCard.tsx', line: 11 }, usedAt: [{ file: '/app/App.tsx', line: 11 }] })
+  const asked = []
+  const fetchImpl = async (url, init) => {
+    asked.push(...JSON.parse(init.body).stack.map(frame => frame.file))
+    return { ok: true, json: async () => ({ stack: [] }) }
+  }
+  await sourcesFor([`Error: react-stack-top-frame\n    at WalletCard (${android}:1:47)`], { fetchImpl })
+
+  assert.deepEqual(asked, [onMac(android)])
 })
 
 test('an owner on the same line as the element is not repeated', async () => {

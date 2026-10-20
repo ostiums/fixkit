@@ -43,7 +43,7 @@ void main() {
   });
 
   test("on Android the report carries the platform and the pixel ratio the receiver reads the screen's pixels with", () {
-    final body = reportBody(const Target(Offset(1, 2)), 'x', os: '6.6', platform: 'android', pixelRatio: 2.625);
+    final body = reportBody(const Target(Offset(1, 2)), 'x', os: '6.6', android: true, pixelRatio: 2.625);
 
     expect(body['platform'], 'android');
     expect(body['pixelRatio'], 2.625);

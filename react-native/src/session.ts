@@ -43,6 +43,7 @@ let ticket = 0
 let hiding: ReturnType<typeof setTimeout> | null = null
 // How long the host's spring takes to slide the app back down.
 const LIFT_SETTLES = 400
+const ANDROID = Platform.OS === 'android'
 // How long Android's keyboard takes to slide away after it says it is hidden, as it starts to.
 const KEYBOARD_SLIDES = 350
 
@@ -80,14 +81,14 @@ export async function send() {
   // The receiver takes the screenshot and reads the screen as the report arrives, so the report
   // leaves once the composer and the keyboard are gone, the app has slid back down and the outline
   // is on screen.
-  const keyboard = keyboardGone().then(() => (Platform.OS === 'android' ? sleep(KEYBOARD_SLIDES) : undefined))
+  const keyboard = keyboardGone().then(() => (ANDROID ? sleep(KEYBOARD_SLIDES) : undefined))
   await Promise.all([keyboard, lift > 0 ? sleep(LIFT_SETTLES) : null])
   set({ outline: target })
   await frames(2)
   let receipt: Receipt | null = null
   try {
-    const platform = Platform.OS === 'android' ? 'android' : 'ios'
-    receipt = await sendReport(reportBody(target, comment, { os: String(Platform.Version), platform, pixelRatio: PixelRatio.get() }))
+    const device = { os: String(Platform.Version), platform: ANDROID ? 'android' : 'ios', pixelRatio: PixelRatio.get() } as const
+    receipt = await sendReport(reportBody(target, comment, device))
   } catch {}
   set({ sending: false, outline: null })
   if (receipt === null) {
