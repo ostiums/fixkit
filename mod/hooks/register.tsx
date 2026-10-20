@@ -158,7 +158,7 @@ export const register: Register = on => {
       await $.tool.register({
         name: 'hot_reload',
         description:
-          'Hot reloads the Flutter app that flutter run runs in the simulator, so saved changes to its Dart code show on screen. restart: true hot restarts it instead, for changes hot reload does not apply. Fails with the reason, a compile error most likely.',
+          'Hot reloads the Flutter app that flutter run runs in the simulator or the emulator, so saved changes to its Dart code show on screen. restart: true hot restarts it instead, for changes hot reload does not apply. Fails with the reason, a compile error most likely.',
         inputSchema: {
           type: 'object',
           properties: { restart: { type: 'boolean', description: 'Hot restart instead of hot reload' } },
@@ -168,7 +168,7 @@ export const register: Register = on => {
     }
     await $.command.register({
       name: 'fix-queue',
-      description: 'Show the fix requests sent from the app in the simulator',
+      description: 'Show the fix requests sent from the app in the simulator or the emulator',
     })
     const started = await next(e)
 
