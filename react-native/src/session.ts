@@ -1,4 +1,4 @@
-import { Keyboard, Platform } from 'react-native'
+import { Keyboard, PixelRatio, Platform } from 'react-native'
 
 import { OFFLINE, agentOf, bannerFor, sentTo, type Banner } from './banners'
 import { launched, sendReport, statusOf, type Receipt, type ReportStatus } from './client'
@@ -83,7 +83,8 @@ export async function send() {
   await frames(2)
   let receipt: Receipt | null = null
   try {
-    receipt = await sendReport(reportBody(target, comment, String(Platform.Version)))
+    const platform = Platform.OS === 'android' ? 'android' : 'ios'
+    receipt = await sendReport(reportBody(target, comment, { os: String(Platform.Version), platform, pixelRatio: PixelRatio.get() }))
   } catch {}
   set({ sending: false, outline: null })
   if (receipt === null) {

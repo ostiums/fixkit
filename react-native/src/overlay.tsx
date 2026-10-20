@@ -1,15 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Animated, Keyboard, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import {
+  ActivityIndicator,
+  Animated,
+  BackHandler,
+  Keyboard,
+  Platform,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 
 import type { Banner } from './banners'
-import { around, dimAround, liftFor, spotlight } from './layout'
+import { around, composerBottom, dimAround, liftFor, spotlight } from './layout'
 import type { Target } from './report'
 import { cancel, send, setDraft, setLift, type SessionState } from './session'
 
 // FixKit's tint, the Swift package's own.
 const TINT = '#D97857'
-// Below the status bar of an iPhone with a Dynamic Island; React Native has no safe-area insets of its own.
-const BANNER_TOP = 60
+// Below the status bar: an iPhone's with a Dynamic Island, as React Native has no safe-area insets of
+// its own, or Android's, whose height it does give.
+const BANNER_TOP = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + 10 : 60
+// Android sends no will-events: its keyboard says so once it is up or gone.
+const KEYBOARD_SHOWN = Platform.OS === 'android' ? 'keyboardDidShow' : 'keyboardWillShow'
+const KEYBOARD_HIDDEN = Platform.OS === 'android' ? 'keyboardDidHide' : 'keyboardWillHide'
 
 /** FixKit's views above the app: the outline for a screenshot, the composer, the banner. */
 export function Overlay({ state }: { state: SessionState }) {
@@ -38,8 +55,16 @@ function Composer({ target, canSend, lift }: { target: Target; canSend: boolean;
   const pulse = useRef(new Animated.Value(0.35)).current
 
   useEffect(() => {
-    const shown = Keyboard.addListener('keyboardWillShow', event => setKeyboard(height - event.endCoordinates.screenY))
-    const hidden = Keyboard.addListener('keyboardWillHide', () => setKeyboard(0))
+    const shown = Keyboard.addListener(KEYBOARD_SHOWN, event =>
+      setKeyboard(Platform.OS === 'android' ? event.endCoordinates.height : height - event.endCoordinates.screenY),
+    )
+    const hidden = Keyboard.addListener(KEYBOARD_HIDDEN, () => setKeyboard(0))
+    // Android's back button closes the composer, not the app's screen under it. With the keyboard
+    // up the first press only hides the keyboard, and the draft stays.
+    const back = BackHandler.addEventListener('hardwareBackPress', () => {
+      cancel()
+      return true
+    })
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
@@ -50,6 +75,7 @@ function Composer({ target, canSend, lift }: { target: Target; canSend: boolean;
     return () => {
       shown.remove()
       hidden.remove()
+      back.remove()
       loop.stop()
     }
   }, [height, pulse])
@@ -84,7 +110,7 @@ function Composer({ target, canSend, lift }: { target: Target; canSend: boolean;
       )}
       {/* Takes the touches that miss its field and button, which would otherwise cancel. */}
       <View
-        style={[styles.composer, { bottom: keyboard + 10 }]}
+        style={[styles.composer, { bottom: composerBottom(keyboard, Platform.OS) }]}
         onStartShouldSetResponder={() => true}
         onLayout={event => setLift(liftFor(elementBottom, event.nativeEvent.layout.y))}
       >

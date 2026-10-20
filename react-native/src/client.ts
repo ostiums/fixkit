@@ -1,5 +1,6 @@
 // Talks to the receiver the fixkit mod runs on this Mac. The simulator shares the Mac's loopback
-// interface, so no address has to be configured.
+// interface, and the receiver has adb reverse its port on the Android emulator's, so no address
+// has to be configured.
 const BASE = 'http://127.0.0.1:4747'
 
 /** The receiver's answer about a report: its run, its id, where the agent is with it and which agent it is. */

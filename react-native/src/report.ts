@@ -20,13 +20,19 @@ const rounded = ({ x, y, width, height }: Frame): Frame => ({
   height: Math.round(height),
 })
 
+/** What the app runs on: the iOS version or Android's API level, and the screen's pixels per point. */
+export type Device = { os: string; platform: 'ios' | 'android'; pixelRatio: number }
+
 /**
- * The report as the receiver takes it. The receiver finds the simulator from `os`, takes the
- * screenshot, and turns `stacks` into source lines through Metro.
+ * The report as the receiver takes it. The receiver finds the simulator or the Android device from
+ * `os`, takes the screenshot, and turns `stacks` into source lines through Metro.
  */
-export function reportBody({ touch, element, stacks }: Target, comment: string, os: string) {
+export function reportBody({ touch, element, stacks }: Target, comment: string, { os, platform, pixelRatio }: Device) {
   return {
     os,
+    platform,
+    // Android's accessibility tree is in the screen's pixels, the touch in points.
+    ...(platform === 'android' && { pixelRatio }),
     comment,
     screen: '',
     touch: { x: Math.round(touch.x), y: Math.round(touch.y) },
