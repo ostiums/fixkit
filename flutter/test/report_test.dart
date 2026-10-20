@@ -42,12 +42,11 @@ void main() {
     });
   });
 
-  test('on Android the report carries the platform, the pixel ratio and the VM service the receiver finds the device by', () {
-    final body = reportBody(const Target(Offset(1, 2)), 'x', os: '6.6', platform: 'android', pixelRatio: 2.625, vmService: 'http://127.0.0.1:1/x=/');
+  test("on Android the report carries the platform and the pixel ratio the receiver reads the screen's pixels with", () {
+    final body = reportBody(const Target(Offset(1, 2)), 'x', os: '6.6', platform: 'android', pixelRatio: 2.625);
 
     expect(body['platform'], 'android');
     expect(body['pixelRatio'], 2.625);
-    expect(body['vmService'], 'http://127.0.0.1:1/x=/');
     expect(body.containsKey('simulator'), isFalse);
   });
 

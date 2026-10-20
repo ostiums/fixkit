@@ -220,20 +220,6 @@ test('a dump that fails leaves the Android report its screenshot', async () => {
   assert.equal(report.screenshot, join('.fixkit', 'reports', 'r1.png'))
 })
 
-test("a Flutter app's report names its device through the VM service the device forwards", async () => {
-  const dir = adbFolder()
-  const adb = fakeAdb(dir, {
-    devices: deviceList('emulator-5554', 'emulator-5556'),
-    forwards: 'emulator-5556 tcp:52361 tcp:43123\n',
-    sdk: { 'emulator-5554': '36', 'emulator-5556': '36' },
-    dump: NAME_DUMP,
-    png: PNG,
-  })
-  const report = await deliver(androidReport({ os: '6.6.30', vmService: 'http://127.0.0.1:43123/x=/' }), undefined, adb)
-
-  assert.equal(report.device, 'emulator-5556')
-})
-
 test('two Android devices on one API level: no screenshot, and the advice once', async t => {
   const dir = adbFolder()
   const adb = fakeAdb(dir, {

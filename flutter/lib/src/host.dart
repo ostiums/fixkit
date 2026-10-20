@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'inspect.dart';
@@ -72,6 +73,11 @@ class _DebugHostState extends State<DebugHost> with WidgetsBindingObserver {
     // Accepting the long press has rejected every other gesture under the finger: the button
     // pressed neither taps nor long presses.
     _session.begin(inspectAt(details.globalPosition, context as Element));
+    // Android 16's predictive back leaves the app on its first screen without asking Flutter, which
+    // the app's navigator says it can't pop there. The composer can be closed: Flutter handles back
+    // from now on. The navigator says so again at its next change; until then a back press on the
+    // first screen still leaves the app, only without the predictive animation.
+    SystemNavigator.setFrameworkHandlesBack(true);
   }
 
   @override

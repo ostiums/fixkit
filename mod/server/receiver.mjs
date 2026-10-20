@@ -15,7 +15,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { Adb, adbCandidates, emulatorRunning, macVmService, pickDevice } from './android.mjs'
-import { NO_APP, NOT_RUNNING, reload } from './flutter.mjs'
+import { NO_APP, reload } from './flutter.mjs'
 import { axeCandidates, describeScreen, elementAt } from './inspect.mjs'
 import { bundleMap, parseStack, sourcesFor, withSources } from './metro.mjs'
 import { bootedSimulator, captureScreen } from './simulator.mjs'
@@ -149,20 +149,11 @@ const reverseNow = port => (reversing ??= keepReversed(port).finally(() => (reve
 // Said once: with two Android devices on one API level, a report that names none cannot tell which is its own.
 let toldDevice = false
 
-/**
- * The Android device a report came from: for a Flutter app, the one its VM service is forwarded
- * from; else the only one online, or the only one on the app's API level.
- */
+/** The Android device a report came from: the only one online, or the only one on the app's API level. */
 async function deviceOf(report) {
   const tool = await findAdb()
   if (tool === null) return null
   const serials = await tool.devices()
-  if (typeof report.vmService === 'string') {
-    const { port } = new URL(report.vmService)
-    const forwards = await tool.forwards().catch(() => [])
-    const forward = forwards.find(one => String(one.device) === port && serials.includes(one.serial))
-    if (forward) return forward.serial
-  }
   const { serial, online } = await pickDevice(serials, { os: report.os, sdkOf: one => tool.sdkOf(one) })
   if (serial === null && online > 1 && !toldDevice) {
     toldDevice = true
@@ -260,11 +251,10 @@ async function prepare({ screenshotPNG, stacks, ...sent }, id) {
   return { ...report, element: withSources(report.element, located), id, screenshot, accessibility }
 }
 
-/** The Flutter app's VM service as the Mac reaches it; null on Android without the forward `flutter run` keeps. */
+/** The Flutter app's VM service as the Mac reaches it: on Android, through the forward `flutter run` keeps. */
 async function vmServiceOnMac({ vmService, android }) {
-  if (!android) return vmService
-  const tool = await findAdb()
-  return tool === null ? null : macVmService(vmService, await tool.forwards().catch(() => []))
+  const tool = android ? await findAdb() : null
+  return tool === null ? vmService : macVmService(vmService, await tool.forwards().catch(() => []))
 }
 
 /** A request's body as text. */
@@ -345,9 +335,7 @@ const server = createServer(async (req, res) => {
       .catch(() => ({}))
       .then(async sent => {
         if (flutterApp === null) return { ok: false, error: NO_APP }
-        const vmService = await vmServiceOnMac(flutterApp)
-        if (vmService === null) return { ok: false, error: NOT_RUNNING }
-        return reload(vmService, { restart: sent?.restart === true }).then(() => ({ ok: true }), error => ({ ok: false, error: error.message }))
+        return reload(await vmServiceOnMac(flutterApp), { restart: sent?.restart === true }).then(() => ({ ok: true }), error => ({ ok: false, error: error.message }))
       })
       .then(answer => reply(res, 200, answer))
     return

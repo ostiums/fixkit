@@ -92,7 +92,7 @@ class Session extends ChangeNotifier {
     await _frames(2);
     Receipt? receipt;
     try {
-      receipt = await _client.sendReport(await _body(pressed, comment));
+      receipt = await _client.sendReport(_body(pressed, comment));
     } catch (_) {}
     sending = false;
     outline = null;
@@ -105,14 +105,13 @@ class Session extends ChangeNotifier {
     unawaited(_follow(receipt.id));
   }
 
-  /// The report on this platform: the simulator it runs in on iOS; on Android what the receiver
-  /// finds the device by and reads its pixels with.
-  Future<Map<String, Object>> _body(Target pressed, String comment) async {
+  /// The report on this platform: the simulator it runs in on iOS; on Android the pixel ratio the
+  /// receiver reads the screen with.
+  Map<String, Object> _body(Target pressed, String comment) {
     final os = osVersion(Platform.operatingSystemVersion);
     if (!Platform.isAndroid) return reportBody(pressed, comment, os: os, simulator: simulatorIn(Directory.systemTemp.path));
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;
-    final vmService = (await developer.Service.getInfo()).serverUri?.toString();
-    return reportBody(pressed, comment, os: os, platform: 'android', pixelRatio: view?.devicePixelRatio, vmService: vmService);
+    return reportBody(pressed, comment, os: os, platform: 'android', pixelRatio: view?.devicePixelRatio);
   }
 
   /// At launch and after every hot reload: tells the receiver the app runs its latest code, which is

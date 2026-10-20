@@ -1,6 +1,7 @@
 import 'package:fixkit/fixkit.dart';
 import 'package:fixkit/src/host.dart' show runsOnDevice;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -66,6 +67,24 @@ void main() {
 
     expect(find.byType(EditableText), findsOneWidget);
     expect(longPresses, 0);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets("on the app's first screen Android still sends the back button to the open composer", (tester) async {
+    // Android 16's predictive back leaves the app on its first screen without asking Flutter,
+    // unless Flutter says it handles back.
+    final calls = <MethodCall>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      calls.add(call);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    await tester.pumpWidget(app());
+    calls.clear();
+
+    await tester.longPress(find.text('Send'));
+    await tester.pump();
+
+    expect(calls.where((call) => call.method == 'SystemNavigator.setFrameworkHandlesBack').map((call) => call.arguments), [true]);
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('on a desktop the host is its child alone', (tester) async {

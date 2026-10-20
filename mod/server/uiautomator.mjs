@@ -20,7 +20,8 @@ function frameOf(bounds, ratio) {
 function element(attributes, ratio) {
   const text = attributes.text || null
   const description = attributes['content-desc'] || null
-  const id = attributes['resource-id'] || null
+  // Android's own views (`android:id/content`) are no part of the app.
+  const id = attributes['resource-id']?.startsWith('android:') ? null : attributes['resource-id'] || null
   return {
     type: attributes.class?.split('.').at(-1) || 'View',
     AXLabel: description ?? text,
