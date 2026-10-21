@@ -389,7 +389,7 @@ Every view in a builder comes back wrapped, so a builder that must return one co
 
 **Android reports come without a screenshot.** With several emulators online, the receiver takes the one on the app's API level. A React Native app sends its level; a Flutter app has none to send without native code, so run one emulator at a time.
 
-**An Android app shows "Claude Code is not listening"** while the agent runs. The app reaches the receiver through adb, and the Fix queue pane says when there is none: install the SDK's platform-tools, or point `FIXKIT_ADB` at adb.
+**An Android app shows "FixKit is not listening"** while the agent runs. The app reaches the receiver through adb, and the Fix queue pane says when there is none: install the SDK's platform-tools, or point `FIXKIT_ADB` at adb.
 
 **A React Native or Flutter app is treated as a native one,** or Codex doesn't start FixKit. Start the agent in the folder with `package.json` or `pubspec.yaml`, not above it.
 
